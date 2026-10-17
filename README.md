@@ -4,7 +4,6 @@ Windows lines your screens up by their pixels. If your screens differ in size, r
 
 physmouse fixes that. You tell it where your screens actually sit on your desk, and it moves the cursor between them by real distance, so it leaves one screen and enters the next at the same physical spot.
 
-![The layout editor](docs/layout.png)
 
 ## Features
 
