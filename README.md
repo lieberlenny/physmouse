@@ -37,21 +37,6 @@ It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows. 
 
 Everything is stored in `%APPDATA%\physmouse\settings.ini`, a plain-text file that's easy to back up or copy to another PC. For a portable setup, put an empty `settings.ini` next to `physmouse.exe` and physmouse will use that instead.
 
-```ini
-enabled = true
-no-screen-beyond-edge = stop        # stop | windows
-edge-resistance = 0                 # pixels to push before crossing
-bypass-key = none                   # none | shift | ctrl | alt
-lock-to-fullscreen = true
-toggle-shortcut = ctrl+alt+f12
-tray-icon = true
-units = mm                          # mm | in
-
-[layout]
-# screen id   x   y   width   height   (mm; x/y is the top-left of the visible image)
-LEN68F6\5&15fef2ea&1&UID4353  -97  -385  797  334   # Legion 34W-2c, 3440x1440
-```
-
 The screen id is the EDID product code plus the port the screen is connected to. If a screen moves to another port or the graphics driver renumbers it, physmouse still matches it by product code, as long as you don't have two identical screens.
 
 ## How it works
