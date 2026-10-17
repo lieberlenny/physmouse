@@ -25,16 +25,20 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 
 ## Install
 
-1. Download `physmouse.exe` from the [latest release](../../releases/latest) and put it somewhere permanent, for example `%LOCALAPPDATA%\Programs\physmouse`.
-2. Run it. The layout editor opens with your screens placed as Windows has them.
-3. Drag them to match your desk and click **Apply**.
-4. Under **General**, turn on **Start with Windows** if you want it.
-
-The first run also adds physmouse to the Start menu.
+1. Download `physmouse.exe` from the [latest release](../../releases/latest) and run it.
+2. Click **Install**. physmouse installs for your user account only, into `%LOCALAPPDATA%\Programs\physmouse`, without needing administrator rights. You can change the folder and choose whether it starts with Windows and gets a desktop shortcut.
+3. Open physmouse. The layout editor shows your screens placed as Windows has them.
+4. Drag them to match your desk and click **Apply**.
 
 physmouse runs in the notification area. Click its icon, or open it again from Start, to bring back the window.
 
-It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows. There is no installer. To remove it, set **Start with Windows** to Off, quit from the tray icon, and delete the exe, `%APPDATA%\physmouse` and the Start menu shortcut (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\physmouse.lnk`).
+To update, download the new `physmouse.exe` and run it. It offers to replace the installed version and keeps your settings and layout.
+
+To uninstall, use Settings > Apps > Installed apps, or **Uninstall** on physmouse's About page. You can choose to keep your settings for a later reinstall.
+
+If you'd rather not install anything, choose **Run portable** instead. physmouse then keeps its settings next to the exe and doesn't touch the Start menu or startup entries until you turn them on.
+
+It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows.
 
 ## Settings file
 

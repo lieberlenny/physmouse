@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -10,8 +11,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Moves the cursor between screens by where they physically sit on your desk.")]
 [assembly: AssemblyProduct("physmouse")]
 [assembly: AssemblyCopyright("Copyright © 2026 Lennart Blees")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 
 static class Program
 {
@@ -22,6 +23,7 @@ static class Program
     public static event Action Changed; // monitors or settings changed; the window redraws
 
     static readonly int ShowMessage = Native.RegisterWindowMessage("physmouse.show");
+    static readonly int ExitMessage = Native.RegisterWindowMessage("physmouse.exit");
     const string IpcTitle = "physmouse.ipc";
     static Mutex mutex;
     static IpcWindow ipc;
@@ -36,6 +38,29 @@ static class Program
     static int Main(string[] args)
     {
         bool background = args.Contains("--background");
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        Native.AllowDarkMenus();
+
+        if (args.Contains("--uninstall"))
+        {
+            var w = new SetupWindow(SetupWindow.Mode.Uninstall);
+            Application.Run(w);
+            if (w.Result == SetupWindow.Outcome.Done) Installer.RemoveFiles();
+            return 0;
+        }
+
+        // Started by hand from a download: offer to install (or update) before anything else.
+        var offer = background ? Installer.Offer.None : Installer.Check();
+        if (offer != Installer.Offer.None)
+        {
+            var w = new SetupWindow(offer == Installer.Offer.Install ? SetupWindow.Mode.Install : SetupWindow.Mode.Update);
+            Application.Run(w);
+            if (w.Result != SetupWindow.Outcome.Portable) return 0; // installed (the installed copy is starting) or cancelled
+            // Portable: settings live next to the exe from now on. Settings hasn't been touched yet, so it picks this up.
+            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini"), "");
+        }
+
         if (!TakeMutex())
         {
             // Already running, maybe elevated or hidden in the tray: ask that copy to show its window.
@@ -44,22 +69,16 @@ static class Program
             return 0;
         }
 
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
         ui = new WindowsFormsSynchronizationContext();
         SynchronizationContext.SetSynchronizationContext(ui);
-        Native.AllowDarkMenus();
 
         Mapper.Cfg = Settings.Load();
         bool firstRun = !Cfg.Existed;
-        try { Startup.Reconcile(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+        // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
+        if (Installer.InstalledExe == null || Installer.RunningInstalled)
+            try { Startup.Reconcile(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         Refresh();
-        if (firstRun)
-        {
-            Cfg.Store(Mapper.Mons);
-            Cfg.Save();
-            try { Startup.CreateShortcut(); } catch (Exception) { } // nice to have; the app works without it
-        }
+        if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
         Mapper.Start();
 
         ipc = new IpcWindow();
@@ -171,6 +190,13 @@ static class Program
     public static void SuspendHotkey() { ipc.Register(Keys.None); }
 
     // Hands over to the elevated scheduled task, which starts a fresh copy with administrator rights.
+    // Used by the installer before it replaces or removes the exe.
+    public static void AskRunningCopyToExit()
+    {
+        var other = Native.FindWindowEx(Native.HWND_MESSAGE, IntPtr.Zero, null, IpcTitle);
+        if (other != IntPtr.Zero) Native.PostMessage(other, ExitMessage, IntPtr.Zero, IntPtr.Zero);
+    }
+
     public static bool RestartElevated()
     {
         mutex.ReleaseMutex();
@@ -189,7 +215,9 @@ static class Program
         public IpcWindow()
         {
             CreateHandle(new CreateParams { Caption = IpcTitle, Parent = Native.HWND_MESSAGE });
-            Native.ChangeWindowMessageFilterEx(Handle, ShowMessage, 1, IntPtr.Zero); // let a non-elevated launch reach an elevated copy
+            // let a non-elevated launch or installer reach an elevated copy
+            Native.ChangeWindowMessageFilterEx(Handle, ShowMessage, 1, IntPtr.Zero);
+            Native.ChangeWindowMessageFilterEx(Handle, ExitMessage, 1, IntPtr.Zero);
         }
 
         public bool Register(Keys k)
@@ -209,6 +237,7 @@ static class Program
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == ShowMessage) ShowWindow();
+            else if (m.Msg == ExitMessage) Application.Exit();
             else if (m.Msg == Native.WM_HOTKEY) SetEnabled(!Cfg.Enabled);
             else base.WndProc(ref m);
         }

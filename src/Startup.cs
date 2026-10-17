@@ -18,8 +18,9 @@ static class Startup
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
     const string Name = "physmouse";
-    static readonly string Exe = Application.ExecutablePath;
-    static readonly string Shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "physmouse.lnk");
+    public static string Exe = Application.ExecutablePath; // the installer points this at the installed copy
+    public static readonly string StartMenuShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "physmouse.lnk");
+    public static readonly string DesktopShortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "physmouse.lnk");
 
     public static bool Elevated
     {
@@ -137,10 +138,9 @@ static class Startup
         }
     }
 
-    // Created on first run; there's no installer, so that run is the install.
-    public static void CreateShortcut()
+    public static void CreateShortcut(string path)
     {
-        object lnk = OpenShortcut();
+        object lnk = OpenShortcut(path);
         var t = lnk.GetType();
         t.InvokeMember("TargetPath", BindingFlags.SetProperty, null, lnk, new object[] { Exe });
         t.InvokeMember("Arguments", BindingFlags.SetProperty, null, lnk, new object[] { "" });
@@ -149,11 +149,11 @@ static class Startup
         t.InvokeMember("Save", BindingFlags.InvokeMethod, null, lnk, null);
     }
 
-    static object OpenShortcut()
+    static object OpenShortcut(string path)
     {
         var shellType = Type.GetTypeFromProgID("WScript.Shell");
         object shell = Activator.CreateInstance(shellType);
-        return shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { Shortcut });
+        return shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
     }
 
     // The exe may have moved since the entries were written; point them back at this copy.
@@ -162,11 +162,15 @@ static class Startup
         using (var run = Registry.CurrentUser.OpenSubKey(RunKey, true))
             if (run != null && run.GetValue(Name) != null && (string)run.GetValue(Name) != "\"" + Exe + "\" --background")
                 run.SetValue(Name, "\"" + Exe + "\" --background");
-        if (!File.Exists(Shortcut)) return;
-        object lnk = OpenShortcut();
-        var t = lnk.GetType();
-        if (!string.Equals((string)t.InvokeMember("TargetPath", BindingFlags.GetProperty, null, lnk, null), Exe, StringComparison.OrdinalIgnoreCase)
-            || (string)t.InvokeMember("Arguments", BindingFlags.GetProperty, null, lnk, null) != "")
-            CreateShortcut();
+        foreach (var path in new[] { StartMenuShortcut, DesktopShortcut })
+        {
+            if (!File.Exists(path)) continue;
+            object lnk = OpenShortcut(path);
+            var t = lnk.GetType();
+            string target = (string)t.InvokeMember("TargetPath", BindingFlags.GetProperty, null, lnk, null);
+            if (!string.Equals(Path.GetFileName(target), "physmouse.exe", StringComparison.OrdinalIgnoreCase)) continue; // someone else's shortcut
+            if (!string.Equals(target, Exe, StringComparison.OrdinalIgnoreCase) || (string)t.InvokeMember("Arguments", BindingFlags.GetProperty, null, lnk, null) != "")
+                CreateShortcut(path);
+        }
     }
 }
