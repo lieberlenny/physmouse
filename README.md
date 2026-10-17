@@ -20,8 +20,6 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 - **Remembers every screen.** Layouts are stored per physical screen, so unplugging a screen and plugging it back in keeps its place. When a new screen is connected, physmouse asks you to place it.
 - Follows Windows' light or dark mode and your accent colour.
 
-![Behaviour settings](docs/behavior.png)
-
 ## Install
 
 1. Download `physmouse.exe` from the [latest release](../../releases/latest) and put it somewhere permanent, for example `%LOCALAPPDATA%\Programs\physmouse`.
