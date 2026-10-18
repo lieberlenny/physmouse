@@ -14,18 +14,17 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 - **Edge behaviour.** Where there's no screen beyond an edge, the cursor either stops there or falls back to Windows' own layout.
 - **Edge resistance.** Optionally require a short push past an edge before the cursor crosses, which keeps it from slipping off while you reach for a scroll bar.
 - **Bypass key.** Hold Shift, Ctrl or Alt to cross the way Windows normally would.
-- **Full-screen lock.** Choose which open apps keep the cursor on their screen in full-screen mode. No apps are selected by default; tray-only apps do not appear in the picker.
+- **Full-screen lock.** Choose which open apps keep the cursor on their screen in full-screen mode. No apps are selected by default.
 - **On/off shortcut.** A global keyboard shortcut that pauses and resumes remapping.
 - **Start with Windows.** Optionally with administrator rights, so the cursor also follows your layout while an elevated window such as Task Manager is in front.
 - **Remembers every screen.** Layouts are stored per physical screen, so unplugging a screen and plugging it back in keeps its place. When a new screen is connected, physmouse asks you to place it.
-- **Settings survive reinstalls.** Preferences and monitor layouts are stored in your user AppData folder and can be reset from General.
 - Follows Windows' light or dark mode and your accent colour.
 
 ## Install
 
 1. Download `physmouse.exe` from the [latest release](../../releases/latest) and run it.
-2. Click **Install**. physmouse installs for your user account only, into `%LOCALAPPDATA%\Programs\physmouse`, without needing administrator rights. You can change the folder and choose whether it starts with Windows and gets a desktop shortcut.
-3. Open physmouse. The layout editor shows your screens placed as Windows has them.
+2. Click **Install**. physmouse installs for your user account only, into `%LOCALAPPDATA%\Programs\physmouse`. You can change the folder and choose whether it starts with Windows and gets a desktop shortcut.
+3. Open physmouse and complete the turotial. The layout editor shows your screens placed as Windows has them.
 4. Drag them to match your desk and click **Apply**.
 
 physmouse runs in the notification area. Click its icon, or open it again from Start, to bring back the window.
@@ -38,7 +37,8 @@ If you'd rather not install anything, choose **Run portable** instead. physmouse
 
 It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows.
 
-**SmartScreen:** This release is unsigned, so Windows may show a warning that it is not commonly downloaded. Download only from the official GitHub release and compare its SHA-256 with the value published alongside that release.
+## **Disclaimer | SmartScreen** 
+This release is unsigned, so Windows may show a warning that it is not commonly downloaded. Download only from the official GitHub release and compare its SHA-256 with the value published alongside that release.
 
 ## Settings file
 
