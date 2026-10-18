@@ -20,6 +20,13 @@ abstract class PaintedWindow : Form
     protected Point mouse = new Point(-9999, -9999);
     protected Hit pressed;
     protected float s = 1; // DPI scale
+    RectangleF openCombo, openComboMenu;
+    string[] openComboItems;
+    Action<int> openComboSet;
+    int openComboIndex;
+    bool openComboSeen;
+    int keyboardFocusIndex = -1;
+    bool keyboardNavigation;
     protected Font fTitle, fBody, fStrong, fCaption, fGlyph, fGlyphSmall;
     protected bool active = true;
     readonly bool resizable;
@@ -66,6 +73,14 @@ abstract class PaintedWindow : Form
 
     protected virtual void OnDeactivated() { }
     protected virtual void OnScaleChanged() { }
+    protected void ClearKeyboardFocus() { keyboardFocusIndex = -1; keyboardNavigation = false; }
+    protected bool CloseComboPopup()
+    {
+        if (openComboItems == null) return false;
+        openComboItems = null;
+        Invalidate();
+        return true;
+    }
 
     void ApplyMinimum()
     {
@@ -85,10 +100,10 @@ abstract class PaintedWindow : Form
     void MakeFonts()
     {
         foreach (var f in new[] { fTitle, fBody, fStrong, fCaption, fGlyph, fGlyphSmall }) if (f != null) f.Dispose();
-        fTitle = new Font(Theme.DisplayFont, 28 * s, GraphicsUnit.Pixel);
-        fBody = new Font(Theme.TextFont, 14 * s, GraphicsUnit.Pixel);
-        fStrong = new Font(Theme.StrongFont, 14 * s, GraphicsUnit.Pixel);
-        fCaption = new Font(Theme.TextFont, 12 * s, GraphicsUnit.Pixel);
+        fTitle = new Font(Theme.DisplayFont, 30 * s, GraphicsUnit.Pixel);
+        fBody = new Font(Theme.TextFont, 15 * s, GraphicsUnit.Pixel);
+        fStrong = new Font(Theme.StrongFont, 15 * s, GraphicsUnit.Pixel);
+        fCaption = new Font(Theme.TextFont, 13 * s, GraphicsUnit.Pixel);
         fGlyph = new Font(Theme.IconFont, 16 * s, GraphicsUnit.Pixel);
         fGlyphSmall = new Font(Theme.IconFont, 10 * s, GraphicsUnit.Pixel);
     }
@@ -113,6 +128,25 @@ abstract class PaintedWindow : Form
     {
         int dark = t.Dark ? 1 : 0;
         Native.DwmSetWindowAttribute(Handle, 20, ref dark, 4); // DWMWA_USE_IMMERSIVE_DARK_MODE
+    }
+
+    protected void PaintFocusBorder(Graphics g)
+    {
+        if (active)
+        {
+            var r = new RectangleF(s, s, ClientSize.Width - 2 * s, ClientSize.Height - 2 * s);
+            using (var p = new Pen(Theme.Mix(t.Bg, t.Text, t.Dark ? 0.20 : 0.08), s)) Stroke(g, p, r, 8 * s);
+        }
+        if (keyboardNavigation)
+        {
+            var targets = hits.Where(h => h.Click != null).ToList();
+            if (keyboardFocusIndex >= 0 && keyboardFocusIndex < targets.Count)
+            {
+                var r = targets[keyboardFocusIndex].R;
+                r.Inflate(2 * s, 2 * s);
+                using (var p = new Pen(t.Accent, 2 * s)) Stroke(g, p, r, 6 * s);
+            }
+        }
     }
 
     // WinForms sets its default icon after OnHandleCreated, so ours goes on once the window is shown.
@@ -257,7 +291,11 @@ abstract class PaintedWindow : Form
 
     protected virtual void OnDown(MouseEventArgs e)
     {
+        keyboardNavigation = false;
+        if (openComboItems != null && !openComboMenu.Contains(e.Location) && !openCombo.Contains(e.Location))
+        { openComboItems = null; Invalidate(); }
         pressed = HitAt(e.Location);
+        keyboardFocusIndex = hits.Where(h => h.Click != null).ToList().IndexOf(pressed);
         if (pressed != null && pressed.Down != null) pressed.Down(e.Location);
         Invalidate();
     }
@@ -278,6 +316,63 @@ abstract class PaintedWindow : Form
         Invalidate();
     }
 
+    protected override bool ProcessCmdKey(ref Message msg, Keys key)
+    {
+        if (ActiveControl == null)
+        {
+            if ((key & Keys.KeyCode) == Keys.Tab)
+            {
+                var targets = hits.Where(h => h.Click != null).ToList();
+                if (targets.Count == 0) return true;
+                bool reverse = (key & Keys.Shift) != 0;
+                keyboardFocusIndex = keyboardFocusIndex < 0 ? (reverse ? targets.Count - 1 : 0)
+                    : (keyboardFocusIndex + (reverse ? targets.Count - 1 : 1)) % targets.Count;
+                keyboardNavigation = true;
+                Invalidate();
+                return true;
+            }
+            if (openComboItems != null && ((key & Keys.KeyCode) == Keys.Up || (key & Keys.KeyCode) == Keys.Down))
+            {
+                openComboIndex = Math.Max(0, Math.Min(openComboItems.Length - 1, openComboIndex + ((key & Keys.KeyCode) == Keys.Down ? 1 : -1)));
+                Invalidate();
+                return true;
+            }
+            if (keyboardNavigation && ((key & Keys.KeyCode) == Keys.Enter || (key & Keys.KeyCode) == Keys.Space))
+            {
+                ActivateKeyboardFocus();
+                Invalidate();
+                return true;
+            }
+        }
+        return base.ProcessCmdKey(ref msg, key);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (ActiveControl == null && keyboardNavigation && e.KeyCode == Keys.Space)
+        {
+            ActivateKeyboardFocus();
+            e.Handled = e.SuppressKeyPress = true;
+            Invalidate();
+            return;
+        }
+        base.OnKeyDown(e);
+    }
+
+    void ActivateKeyboardFocus()
+    {
+        if (openComboItems != null)
+        {
+            openComboSet(openComboIndex);
+            openComboItems = null;
+        }
+        else
+        {
+            var targets = hits.Where(h => h.Click != null).ToList();
+            if (keyboardFocusIndex >= 0 && keyboardFocusIndex < targets.Count) targets[keyboardFocusIndex].Click();
+        }
+    }
+
     // ---------------------------------------------------------------- building blocks
 
     protected bool Hot(RectangleF r) { return r.Contains(mouse) && (pressed == null || pressed.R == r); }
@@ -287,15 +382,21 @@ abstract class PaintedWindow : Form
 
     protected void Draw(Graphics g, string text, Font f, Color c, RectangleF r, TextFormatFlags flags)
     {
-        TextRenderer.DrawText(g, text, f, Rectangle.Round(r), c, flags | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | (flags.HasFlag(TextFormatFlags.WordBreak) ? 0 : TextFormatFlags.SingleLine));
+        DrawNative(g, text, f, Rectangle.Round(r), c, flags | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | (flags.HasFlag(TextFormatFlags.WordBreak) ? 0 : TextFormatFlags.SingleLine));
     }
 
     protected float DrawWrapped(Graphics g, string text, Font f, Color c, float x, float y, float w)
     {
         var flags = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
         var size = TextRenderer.MeasureText(g, text, f, new Size((int)w, int.MaxValue), flags);
-        TextRenderer.DrawText(g, text, f, new Rectangle((int)x, (int)y, (int)w, size.Height), c, flags);
+        DrawNative(g, text, f, new Rectangle((int)x, (int)y, (int)w, size.Height), c, flags);
         return size.Height;
+    }
+
+    void DrawNative(Graphics g, string text, Font f, Rectangle r, Color c, TextFormatFlags flags)
+    {
+        TextRenderer.DrawText(g, text, f, r, c,
+            flags | TextFormatFlags.PreserveGraphicsClipping | TextFormatFlags.PreserveGraphicsTranslateTransform);
     }
 
     protected static void Fill(Graphics g, Brush b, RectangleF r, float rad) { using (var p = Theme.Round(r, rad)) g.FillPath(b, p); }
@@ -307,15 +408,15 @@ abstract class PaintedWindow : Form
 
     protected void FillCard(Graphics g, RectangleF r, bool hover)
     {
-        using (var b = new SolidBrush(hover ? t.CardHover : t.Card)) Fill(g, b, r, 4 * s);
-        using (var p = new Pen(t.Stroke, 1)) Stroke(g, p, r, 4 * s);
+        using (var b = new SolidBrush(hover ? t.CardHover : t.Card)) Fill(g, b, r, 8 * s);
+        using (var p = new Pen(t.Stroke, 1)) Stroke(g, p, r, 8 * s);
     }
 
     protected void Group(Graphics g, ref float y, RectangleF a, string title)
     {
         if (y > a.Y) y += 20 * s;
-        Draw(g, title, fStrong, t.Text, new RectangleF(a.X + 2 * s, y, a.Width, 20 * s), TextFormatFlags.Left);
-        y += 28 * s;
+        Draw(g, title, fStrong, t.Text, new RectangleF(a.X + 2 * s, y, a.Width, 24 * s), TextFormatFlags.Left);
+        y += 32 * s;
     }
 
     // A settings row: icon, title, description on the left; the caller puts a control at the right.
@@ -325,14 +426,14 @@ abstract class PaintedWindow : Form
         var flags = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
         int descH = desc == "" ? 0 : TextRenderer.MeasureText(g, desc, fCaption, new Size((int)textW, int.MaxValue), flags).Height;
         int errH = error == null ? 0 : TextRenderer.MeasureText(g, error, fCaption, new Size((int)textW, int.MaxValue), flags).Height + (int)(4 * s);
-        float h = Math.Max(68 * s, 14 * s + 20 * s + descH + errH + 14 * s);
+        float h = Math.Max(72 * s, 14 * s + 22 * s + descH + errH + 14 * s);
         var r = new RectangleF(a.X, y, a.Width, h);
         FillCard(g, r, Hot(r) && pressed == null);
-        float ty = r.Y + (h - (20 * s + descH + errH)) / 2;
+        float ty = r.Y + (h - (22 * s + descH + errH)) / 2;
         Draw(g, glyph, fGlyph, t.Text, new RectangleF(a.X + 20 * s, r.Y, 20 * s, h), TextFormatFlags.VerticalCenter);
-        Draw(g, title, fBody, t.Text, new RectangleF(textX, ty, textW, 20 * s), TextFormatFlags.EndEllipsis | TextFormatFlags.PathEllipsis);
-        if (descH > 0) TextRenderer.DrawText(g, desc, fCaption, new Rectangle((int)textX, (int)(ty + 20 * s), (int)textW, descH), t.TextDim, flags);
-        if (error != null) TextRenderer.DrawText(g, error, fCaption, new Rectangle((int)textX, (int)(ty + 20 * s + descH + 4 * s), (int)textW, errH), t.Danger, flags);
+        Draw(g, title, fBody, t.Text, new RectangleF(textX, ty, textW, 22 * s), TextFormatFlags.EndEllipsis | TextFormatFlags.PathEllipsis);
+        if (descH > 0) DrawNative(g, desc, fCaption, new Rectangle((int)textX, (int)(ty + 22 * s), (int)textW, descH), t.TextDim, flags);
+        if (error != null) DrawNative(g, error, fCaption, new Rectangle((int)textX, (int)(ty + 22 * s + descH + 4 * s), (int)textW, errH), t.Danger, flags);
         y += h + 4 * s;
         return r;
     }
@@ -364,8 +465,8 @@ abstract class PaintedWindow : Form
     protected void PaintControlBox(Graphics g, RectangleF r, bool focused)
     {
         bool hot = Hot(r), down = IsDown(r);
-        using (var b = new SolidBrush(down ? t.ControlDown : hot ? t.ControlHover : t.Control)) Fill(g, b, r, 4 * s);
-        using (var p = new Pen(t.ControlStroke, 1)) Stroke(g, p, r, 4 * s);
+        using (var b = new SolidBrush(down ? t.ControlDown : hot ? t.ControlHover : t.Control)) Fill(g, b, r, 6 * s);
+        using (var p = new Pen(t.ControlStroke, 1)) Stroke(g, p, r, 6 * s);
         if (focused)
         {
             var state = g.Save();
@@ -387,15 +488,43 @@ abstract class PaintedWindow : Form
         PaintControlBox(g, r, false);
         Draw(g, items[index], fBody, t.Text, new RectangleF(r.X + 12 * s, r.Y, r.Width - 40 * s, r.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         Draw(g, "\uE70D", fGlyphSmall, t.TextDim, new RectangleF(r.Right - 28 * s, r.Y, 16 * s, r.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+        if (openComboItems != null && openCombo == r) openComboSeen = true;
         hits.Add(new Hit
         {
             R = r,
             Click = () =>
             {
-                var menu = new ContextMenu(items.Select((label, i) => new MenuItem(label, (o, e) => { set(i); Invalidate(); }) { RadioCheck = true, Checked = i == index }).ToArray());
-                menu.Show(this, new Point((int)r.X, (int)r.Bottom + (int)(2 * s)));
+                if (openComboItems != null && openCombo == r) openComboItems = null;
+                else { openCombo = r; openComboItems = items; openComboSet = set; openComboIndex = index; }
+                Invalidate();
             }
         });
+    }
+
+    protected void PaintComboPopup(Graphics g, RectangleF viewport, float scroll)
+    {
+        if (openComboItems == null) return;
+        if (!openComboSeen) { openComboItems = null; return; }
+        openComboSeen = false;
+        float row = 30 * s, pad = 4 * s, h = openComboItems.Length * row + pad * 2;
+        float y = openCombo.Bottom + 2 * s;
+        float viewTop = viewport.Y + scroll, viewBottom = viewport.Bottom + scroll;
+        if (y + h > viewBottom) y = openCombo.Top - h - 2 * s;
+        if (y < viewTop) y = viewTop;
+        openComboMenu = new RectangleF(openCombo.X, y, openCombo.Width, h);
+        using (var b = new SolidBrush(t.Card)) Fill(g, b, openComboMenu, 8 * s);
+        using (var p = new Pen(t.ControlStroke, 1)) Stroke(g, p, openComboMenu, 8 * s);
+        for (int i = 0; i < openComboItems.Length; i++)
+        {
+            var r = new RectangleF(openComboMenu.X + pad, y + pad + i * row, openComboMenu.Width - pad * 2, row);
+            bool hot = r.Contains(mouse);
+            if (hot || i == openComboIndex)
+                using (var b = new SolidBrush(hot ? t.ControlHover : t.NavSelected)) Fill(g, b, r, 5 * s);
+            if (i == openComboIndex) Draw(g, "•", fBody, t.Accent, new RectangleF(r.X + 8 * s, r.Y, 14 * s, r.Height), TextFormatFlags.VerticalCenter);
+            Draw(g, openComboItems[i], fBody, t.Text, new RectangleF(r.X + 28 * s, r.Y, r.Width - 36 * s, r.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            int selected = i;
+            hits.Add(new Hit { R = r, Click = () => { openComboSet(selected); openComboItems = null; Invalidate(); } });
+        }
     }
 
     protected float Measure(Graphics g, string text, float min)
@@ -410,13 +539,13 @@ abstract class PaintedWindow : Form
         bool hot = enabled && Hot(r), down = enabled && IsDown(r);
         if (accent && enabled)
         {
-            using (var b = new SolidBrush(down ? Theme.Mix(t.Accent, t.Bg, 0.2) : hot ? t.AccentHover : t.Accent)) Fill(g, b, r, 4 * s);
+            using (var b = new SolidBrush(down ? Theme.Mix(t.Accent, t.Bg, 0.2) : hot ? t.AccentHover : t.Accent)) Fill(g, b, r, 6 * s);
             Draw(g, text, fBody, t.OnAccent, r, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
         else
         {
-            using (var b = new SolidBrush(down ? t.ControlDown : hot ? t.ControlHover : t.Control)) Fill(g, b, r, 4 * s);
-            using (var p = new Pen(t.ControlStroke, 1)) Stroke(g, p, r, 4 * s);
+            using (var b = new SolidBrush(down ? t.ControlDown : hot ? t.ControlHover : t.Control)) Fill(g, b, r, 6 * s);
+            using (var p = new Pen(t.ControlStroke, 1)) Stroke(g, p, r, 6 * s);
             Draw(g, text, fBody, enabled ? t.Text : t.TextOff, r, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
         if (enabled) hits.Add(new Hit { R = r, Click = click });

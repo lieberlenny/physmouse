@@ -72,7 +72,7 @@ static class Mapper
             if (!Plan(Mons, cur, info.pt, out mv)) pushed = 0;
             else
             {
-                bool locked = cfg.LockFullscreen && FullscreenOn(mv.From);
+                bool locked = cfg.LockFullscreen && FullscreenOn(mv.From, cfg.BlockedApps);
                 if (mv.To != null || locked || cfg.HoldAtEdge)
                 {
                     bool cross = mv.To != null && !locked;
@@ -92,10 +92,11 @@ static class Mapper
 
     // A window covering the whole screen (game, video, presentation), other than the desktop itself.
     // Maximized windows keep their title bar, so they don't count, even on a screen without a taskbar.
-    static bool FullscreenOn(Mon m)
+    static bool FullscreenOn(Mon m, string[] selectedApps)
     {
         var fg = Native.GetForegroundWindow();
-        if (fg == IntPtr.Zero || (Native.GetWindowLong(fg, -16) & 0x00C00000) == 0x00C00000) return false; // GWL_STYLE, WS_CAPTION
+        if (fg == IntPtr.Zero || !FullscreenApps.IsSelectedWindow(fg, selectedApps)
+            || (Native.GetWindowLong(fg, -16) & 0x00C00000) == 0x00C00000) return false; // GWL_STYLE, WS_CAPTION
         var cls = new StringBuilder(64);
         Native.GetClassName(fg, cls, cls.Capacity);
         var c = cls.ToString();

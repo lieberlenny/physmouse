@@ -14,24 +14,26 @@ class Settings
     public int Resistance;              // pixels of push before the cursor crosses to another screen
     public Keys BypassKey = Keys.None;  // ShiftKey, ControlKey or Menu
     public bool LockFullscreen = true;
+    public string[] BlockedApps = new string[0];
     public Keys Hotkey = Keys.None;     // key code plus Control/Alt/Shift
     public bool TrayIcon = true;
     public bool Inches;
+    public bool WelcomeShown;
     public readonly Dictionary<string, double[]> Layout = new Dictionary<string, double[]>(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> notes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     public bool Existed;
 
-    // Portable mode: a settings.ini next to the exe wins over the one in AppData.
-    public static readonly string FilePath = File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini"))
-        ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini")
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "physmouse", "settings.ini");
+    public static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "physmouse", "settings.ini");
 
     public static Settings Load()
     {
-        if (!File.Exists(FilePath)) return new Settings();
-        var s = Parse(File.ReadAllText(FilePath));
+        string legacy = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini");
+        string path = File.Exists(FilePath) ? FilePath : legacy;
+        if (!File.Exists(path)) return new Settings();
+        var s = Parse(File.ReadAllText(path));
         s.Existed = true;
+        if (path != FilePath) s.Save(); // move an old portable settings file into the permanent per-user location
         return s;
     }
 
@@ -91,6 +93,10 @@ class Settings
         Line(sb, "toggle-shortcut", Hotkey == Keys.None ? "none" : HotkeyText(Hotkey).ToLowerInvariant().Replace(" ", ""), "e.g. ctrl+alt+f12");
         Line(sb, "tray-icon", TrayIcon ? "true" : "false", "");
         Line(sb, "units", Inches ? "in" : "mm", "mm | in (display only, the layout is always stored in mm)");
+        Line(sb, "welcome-shown", WelcomeShown ? "true" : "false", "");
+        sb.AppendLine();
+        sb.AppendLine("[fullscreen-apps]");
+        foreach (var app in BlockedApps.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) sb.AppendLine(app);
         sb.AppendLine();
         sb.AppendLine("[layout]");
         sb.AppendLine("# screen id   x   y   width   height   (mm; x/y is the top-left of the visible image)");
@@ -111,14 +117,26 @@ class Settings
 
     public static Settings Parse(string text)
     {
-        var s = new Settings();
-        bool layout = false;
+        var s = new Settings { WelcomeShown = !string.IsNullOrWhiteSpace(text) }; // non-empty older settings have already been through first run
+        bool layout = false, fullscreenApps = false;
+        var blockedApps = new List<string>();
         foreach (var raw in text.Split('\n'))
         {
+            string sectionLine = raw.Trim();
+            if (sectionLine.StartsWith("["))
+            {
+                layout = sectionLine.Equals("[layout]", StringComparison.OrdinalIgnoreCase);
+                fullscreenApps = sectionLine.Equals("[fullscreen-apps]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (fullscreenApps)
+            {
+                if (sectionLine != "" && !sectionLine.StartsWith("#")) blockedApps.Add(sectionLine);
+                continue;
+            }
             int hash = raw.IndexOf('#');
             string line = (hash >= 0 ? raw.Substring(0, hash) : raw).Trim();
             if (line == "") continue;
-            if (line.StartsWith("[")) { layout = line.Equals("[layout]", StringComparison.OrdinalIgnoreCase); continue; }
             if (layout)
             {
                 var t = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
@@ -144,8 +162,10 @@ class Settings
                 case "toggle-shortcut": s.Hotkey = ParseHotkey(val); break;
                 case "tray-icon": s.TrayIcon = val != "false"; break;
                 case "units": s.Inches = val == "in"; break;
+                case "welcome-shown": s.WelcomeShown = val == "true"; break;
             }
         }
+        s.BlockedApps = blockedApps.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         return s;
     }
 

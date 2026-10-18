@@ -6,7 +6,6 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -27,8 +26,10 @@ class MainWindow : PaintedWindow
     PointF origin;
     double? guideX, guideY;
     RectangleF canvas;
-    Point lastCursor;
-    readonly System.Windows.Forms.Timer cursorTimer = new System.Windows.Forms.Timer { Interval = 30 };
+    float contentScroll, contentHeight, contentMax;
+    RectangleF contentViewport, scrollTrack, scrollThumb;
+    bool scrollingContent;
+    float scrollStartY, scrollStartOffset;
 
     // inline number editing
     TextBox box;
@@ -38,19 +39,17 @@ class MainWindow : PaintedWindow
     bool capturing;
     string hotkeyError, startupError;
     Startup.Mode startMode;
+    bool blockedAppsExpanded;
+    bool replayPromptVisible;
+    int tutorialStep = -1;
+    float tutorialPhase;
+    readonly System.Windows.Forms.Timer tutorialTimer = new System.Windows.Forms.Timer { Interval = 30 };
 
     public MainWindow() : base("physmouse", 1040, 720, 820, 560, true)
     {
         edit = Copy(Mapper.Mons);
         Program.Changed += OnChanged;
-        cursorTimer.Tick += (o, e) =>
-        {
-            Point p;
-            if (page != Page.Layout || !Visible || WindowState == FormWindowState.Minimized || !Native.GetCursorPos(out p) || p == lastCursor) return;
-            lastCursor = p;
-            Invalidate(Rectangle.Ceiling(canvas));
-        };
-        cursorTimer.Start();
+        tutorialTimer.Tick += (o, e) => { tutorialPhase += 0.035f; Invalidate(); };
     }
 
     protected override void Dispose(bool disposing)
@@ -58,12 +57,24 @@ class MainWindow : PaintedWindow
         if (disposing)
         {
             Program.Changed -= OnChanged;
-            cursorTimer.Dispose();
+            tutorialTimer.Dispose();
         }
         base.Dispose(disposing);
     }
 
-    protected override void OnDeactivated() { EndCapture(); EndEdit(true); }
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        if (Program.Cfg.WelcomeShown) return;
+        StartTutorial();
+    }
+
+    protected override void OnDeactivated() { EndCapture(); EndEdit(true); tutorialTimer.Stop(); }
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        if (tutorialStep >= 0 && SystemInformation.IsMenuAnimationEnabled) tutorialTimer.Start();
+    }
     protected override void OnScaleChanged() { EndEdit(true); }
 
     static List<Mon> Copy(IEnumerable<Mon> ms) { return ms.Select(m => m.Clone()).ToList(); }
@@ -95,6 +106,12 @@ class MainWindow : PaintedWindow
             if (answer == DialogResult.Yes) Apply();
         }
         base.OnFormClosing(e);
+        if (!e.Cancel && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            Hide();
+            Program.UpdateTray();
+        }
     }
 
     // ---------------------------------------------------------------- input
@@ -103,11 +120,21 @@ class MainWindow : PaintedWindow
     {
         EndEdit(true);
         base.OnDown(e);
-        if (capturing && (pressed == null || pressed.R != hotkeyRect)) EndCapture();
+        var visibleHotkey = hotkeyRect;
+        visibleHotkey.Y -= contentScroll;
+        if (capturing && (pressed == null || !visibleHotkey.Contains(e.Location))) EndCapture();
     }
 
     protected override void OnMove(MouseEventArgs e)
     {
+        if (scrollingContent)
+        {
+            ClearKeyboardFocus();
+            contentScroll = Math.Max(0, Math.Min(contentMax,
+                scrollStartOffset + (e.Y - scrollStartY) * contentMax / Math.Max(1, scrollTrack.Height - scrollThumb.Height)));
+            Invalidate();
+            return;
+        }
         if (drag == null) { base.OnMove(e); return; }
         mouse = e.Location;
         DragTo(e.Location);
@@ -115,6 +142,7 @@ class MainWindow : PaintedWindow
 
     protected override void OnUp(MouseEventArgs e)
     {
+        if (scrollingContent) { scrollingContent = false; pressed = null; Invalidate(); return; }
         if (drag == null) { base.OnUp(e); return; }
         pressed = null;
         drag = null;
@@ -124,9 +152,25 @@ class MainWindow : PaintedWindow
 
     protected override bool ProcessCmdKey(ref Message msg, Keys key)
     {
+        if (tutorialStep >= 0)
+        {
+            if (key == Keys.Escape) { EndTutorial(); return true; }
+            if (key == Keys.Left && tutorialStep > 0) { tutorialStep--; tutorialPhase = 0; Invalidate(); return true; }
+            if (key == Keys.Right) { AdvanceTutorial(); return true; }
+            return true;
+        }
+        if (key == Keys.Escape && CloseComboPopup()) return true;
         if (capturing) { CaptureKey(key); return true; }
         if (box != null) return base.ProcessCmdKey(ref msg, key);
         if (key == Keys.Escape) { if (sel != null) { sel = null; Invalidate(); } else Close(); return true; }
+        if (page != Page.Layout && contentMax > 0 && (key == Keys.PageDown || key == Keys.PageUp || key == Keys.Home || key == Keys.End))
+        {
+            ClearKeyboardFocus();
+            contentScroll = key == Keys.Home ? 0 : key == Keys.End ? contentMax :
+                Math.Max(0, Math.Min(contentMax, contentScroll + (key == Keys.PageDown ? 1 : -1) * contentViewport.Height * 0.85f));
+            Invalidate();
+            return true;
+        }
         if (page == Page.Layout)
         {
             if (key == (Keys.Control | Keys.S)) { if (dirty) Apply(); return true; }
@@ -154,6 +198,8 @@ class MainWindow : PaintedWindow
         EndEdit(true);
         EndCapture();
         page = p;
+        ClearKeyboardFocus();
+        contentScroll = contentHeight = contentMax = 0;
         hotkeyError = startupError = null;
         if (p == Page.General) startMode = Startup.Current();
         Invalidate();
@@ -173,16 +219,74 @@ class MainWindow : PaintedWindow
         PaintCaption(g);
 
         // settings pages keep a readable width; the layout canvas uses whatever space there is
-        float left = navW + 20 * s, right = page == Page.Layout ? ClientSize.Width - 40 * s : Math.Min(ClientSize.Width - 40 * s, left + 1000 * s);
+        float left = navW + 20 * s, right = page == Page.Layout ? ClientSize.Width - 40 * s : Math.Min(ClientSize.Width - 52 * s, left + 1000 * s);
         Draw(g, PageNames[(int)page], fTitle, t.Text, new RectangleF(left, 28 * s, right - left, 44 * s), TextFormatFlags.VerticalCenter);
         var area = new RectangleF(left, 92 * s, right - left, ClientSize.Height - 92 * s - 24 * s);
-        switch (page)
+        contentViewport = area;
+        if (page == Page.Layout) PaintLayout(g, area);
+        else
         {
-            case Page.Layout: PaintLayout(g, area); break;
-            case Page.Behavior: PaintBehavior(g, area); break;
-            case Page.General: PaintGeneral(g, area); break;
-            case Page.About: PaintAbout(g, area); break;
+            hits.Add(new Hit { R = area, Wheel = ScrollContent });
+            int firstContentHit = hits.Count;
+            var state = g.Save();
+            g.SetClip(area);
+            g.TranslateTransform(0, -contentScroll);
+            if (page == Page.Behavior) PaintBehavior(g, area);
+            else if (page == Page.General) PaintGeneral(g, area);
+            else PaintAbout(g, area);
+            PaintComboPopup(g, area, contentScroll);
+            g.Restore(state);
+
+            for (int i = hits.Count - 1; i >= firstContentHit; i--)
+            {
+                var r = hits[i].R;
+                r.Y -= contentScroll;
+                r = RectangleF.Intersect(r, area);
+                if (r.IsEmpty) hits.RemoveAt(i);
+                else hits[i].R = r;
+            }
+            contentMax = Math.Max(0, contentHeight - area.Height);
+            if (contentScroll > contentMax) { contentScroll = contentMax; Invalidate(); }
+            PaintScrollBar(g, area);
         }
+        if (page == Page.Layout) PaintComboPopup(g, area, 0);
+        if (tutorialStep >= 0) PaintTutorial(g);
+        else if (replayPromptVisible) PaintReplayPrompt(g);
+        PaintFocusBorder(g);
+    }
+
+    void ScrollContent(int delta)
+    {
+        ClearKeyboardFocus();
+        EndEdit(true);
+        contentScroll = Math.Max(0, Math.Min(contentMax, contentScroll - delta * 48 * s));
+        Invalidate();
+    }
+
+    void PaintScrollBar(Graphics g, RectangleF area)
+    {
+        if (contentMax <= 0) return;
+        float x = area.Right - 8 * s;
+        scrollTrack = new RectangleF(x, area.Y + 4 * s, 4 * s, area.Height - 8 * s);
+        float thumbHeight = Math.Max(28 * s, scrollTrack.Height * area.Height / contentHeight);
+        float travel = scrollTrack.Height - thumbHeight;
+        float thumbY = scrollTrack.Y + (contentMax == 0 ? 0 : travel * contentScroll / contentMax);
+        scrollThumb = new RectangleF(x - 3 * s, thumbY, 10 * s, thumbHeight);
+        using (var b = new SolidBrush(t.Grid)) Fill(g, b, scrollTrack, 2 * s);
+        using (var b = new SolidBrush(scrollThumb.Contains(mouse) ? t.TextDim : t.TextOff)) Fill(g, b, scrollThumb, 5 * s);
+        var trackHit = RectangleF.Inflate(scrollTrack, 5 * s, 0);
+        hits.Add(new Hit { R = trackHit, Cursor = Cursors.Hand, Down = pt =>
+        {
+            ClearKeyboardFocus();
+            contentScroll = Math.Max(0, Math.Min(contentMax, contentScroll + (pt.Y < scrollThumb.Top ? -1 : 1) * contentViewport.Height * 0.85f));
+            Invalidate();
+        }});
+        hits.Add(new Hit { R = RectangleF.Inflate(scrollThumb, 3 * s, 0), Cursor = Cursors.SizeNS, Down = pt =>
+        {
+            scrollingContent = true;
+            scrollStartY = pt.Y;
+            scrollStartOffset = contentScroll;
+        }});
     }
 
     void PaintNav(Graphics g, float navW)
@@ -195,7 +299,7 @@ class MainWindow : PaintedWindow
             var r = new RectangleF(8 * s, y, navW - 16 * s, 36 * s);
             bool on = (int)page == i;
             if (on || Hot(r))
-                using (var b = new SolidBrush(on ? t.NavSelected : IsDown(r) ? t.NavSelected : t.NavHover)) Fill(g, b, r, 4 * s);
+                using (var b = new SolidBrush(on ? t.NavSelected : IsDown(r) ? t.NavSelected : t.NavHover)) Fill(g, b, r, 8 * s);
             if (on)
                 using (var b = new SolidBrush(t.Accent)) Fill(g, b, new RectangleF(r.X, r.Y + 10 * s, 3 * s, 16 * s), 1.5f * s);
             Draw(g, PageGlyphs[i], fGlyph, t.Text, new RectangleF(r.X + 16 * s, r.Y, 20 * s, r.Height), TextFormatFlags.VerticalCenter);
@@ -250,8 +354,10 @@ class MainWindow : PaintedWindow
         float by = a.Bottom - barH;
         float bx = a.X;
         bx = Button(g, bx, by, "Identify", false, true, () => Identify.Show(edit, t)) + 8 * s;
-        Button(g, bx, by, "Reset to detected", false, true, () =>
+        Button(g, bx, by, "Reset to Windows defaults", false, true, () =>
         {
+            if (MessageBox.Show(this, "Reset the screen positions in this editor to Windows' layout? You can still cancel with Revert before applying.",
+                "Reset screen layout", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             string selId = sel == null ? null : sel.Id;
             edit = Monitors.Detect();
             sel = edit.FirstOrDefault(m => m.Id == selId);
@@ -354,7 +460,7 @@ class MainWindow : PaintedWindow
             var r = View(m);
             r.Inflate(-2 * s, -2 * s); // touching screens still read as two
             bool isSel = m == sel, hot = Hot(r) && drag == null;
-            using (var b = new SolidBrush(isSel ? Theme.Mix(t.Tile, t.Accent, t.Dark ? 0.18 : 0.10) : hot ? Theme.Mix(t.Tile, t.Text, 0.04) : t.Tile)) Fill(g, b, r, 6 * s);
+            using (var b = new SolidBrush(isSel ? (t.HighContrast ? t.Tile : Theme.Mix(t.Tile, t.Accent, t.Dark ? 0.18 : 0.10)) : hot ? Theme.Mix(t.Tile, t.Text, 0.04) : t.Tile)) Fill(g, b, r, 8 * s);
             using (var p = new Pen(isSel ? t.Accent : t.TileStroke, (isSel ? 2 : 1) * s)) Stroke(g, p, r, 6 * s);
 
             float numSize = Math.Max(10, Math.Min(40 * s, Math.Min(r.Height * 0.36f, r.Width * 0.3f)));
@@ -374,20 +480,6 @@ class MainWindow : PaintedWindow
             hits.Add(new Hit { R = r, Cursor = Cursors.SizeAll, Down = pt => { sel = drag = mon; grabX = MmX(pt.X) - mon.X; grabY = MmY(pt.Y) - mon.Y; } });
         }
 
-        // where the cursor is right now, in this (possibly unsaved) layout
-        Point c;
-        Native.GetCursorPos(out c);
-        var on = edit.FirstOrDefault(m => m.R.Contains(c));
-        if (on != null)
-        {
-            float cx = SX(on.X + (c.X - on.R.Left + 0.5) * on.W / on.R.Width), cy = SY(on.Y + (c.Y - on.R.Top + 0.5) * on.H / on.R.Height);
-            // a small arrow pointer, tip at the cursor position
-            float u = 1.1f * s;
-            var arrow = new[] { new PointF(0, 0), new PointF(0, 16), new PointF(4, 12.5f), new PointF(7, 18.5f), new PointF(9.5f, 17.5f), new PointF(6.5f, 11.5f), new PointF(11.5f, 11.5f) }
-                .Select(q => new PointF(cx + q.X * u, cy + q.Y * u)).ToArray();
-            g.FillPolygon(Brushes.White, arrow);
-            using (var p = new Pen(Color.Black, 1.2f * s) { LineJoin = LineJoin.Round }) g.DrawPolygon(p, arrow);
-        }
         g.Restore(state);
     }
 
@@ -436,8 +528,30 @@ class MainWindow : PaintedWindow
         c = Card(g, ref y, a, "\uE765", "Bypass key", "Hold this key while moving the cursor to cross screens the way Windows normally would.", ComboWidth(g, Settings.BypassNames));
         Combo(g, c, Settings.BypassNames, Math.Max(0, Array.IndexOf(Settings.BypassKeys, cfg.BypassKey)), i => { cfg.BypassKey = Settings.BypassKeys[i]; Program.Save(); });
 
-        c = Card(g, ref y, a, "\uE740", "Keep the cursor on full-screen apps", "While a game or video fills a screen, the cursor can't leave that screen." + (cfg.BypassKey != Keys.None ? " Hold the bypass key to get out." : " Switch apps with Alt+Tab, or set a bypass key, to get out."), ToggleWidth(g));
+        float toggleW = ToggleWidth(g), chooseW = Measure(g, "Choose apps", 0);
+        c = Card(g, ref y, a, "\uE740", "Lock cursor in full-screen apps", "When enabled, the cursor stays on the same display while selected apps are full-screen.", toggleW + chooseW + 16 * s);
+        chooseAppsRect = new RectangleF(c.Right - 16 * s - toggleW - 8 * s - chooseW, c.Y + (c.Height - 32 * s) / 2, chooseW, 32 * s);
+        Button(g, chooseAppsRect.X, chooseAppsRect.Y, "Choose apps", false, true, ChooseFullscreenApps);
         Toggle(g, c, cfg.LockFullscreen, v => { cfg.LockFullscreen = v; Program.Save(); });
+        if (cfg.BlockedApps.Length > 0)
+        {
+            c = Card(g, ref y, a, "\uE8D7", "Apps with cursor lock", cfg.BlockedApps.Length + (cfg.BlockedApps.Length == 1 ? " selected application" : " selected applications"), 0);
+            var disclosure = new RectangleF(c.X, c.Y, c.Width, c.Height);
+            Draw(g, blockedAppsExpanded ? "\uE70E" : "\uE70D", fGlyphSmall, t.TextDim,
+                new RectangleF(c.Right - 36 * s, c.Y, 20 * s, c.Height), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            hits.Add(new Hit { R = disclosure, Click = () => { blockedAppsExpanded = !blockedAppsExpanded; Invalidate(); } });
+            if (blockedAppsExpanded)
+            {
+                string names = string.Join("   ·   ", cfg.BlockedApps.Select(n => n + ".exe"));
+                float textHeight = TextRenderer.MeasureText(g, names, fCaption, new Size((int)(a.Width - 32 * s), int.MaxValue),
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Height;
+                float panelHeight = textHeight + 20 * s;
+                FillCard(g, new RectangleF(a.X, y, a.Width, panelHeight), false);
+                DrawWrapped(g, names, fCaption, t.TextDim, a.X + 16 * s, y + 10 * s, a.Width - 32 * s);
+                y += panelHeight + 4 * s;
+            }
+        }
+        contentHeight = y - a.Y;
     }
 
     // ------------------------------------------------ General page
@@ -472,12 +586,34 @@ class MainWindow : PaintedWindow
         Combo(g, c, unitItems, cfg.Inches ? 1 : 0, i => { cfg.Inches = i == 1; Program.Save(); });
 
         Group(g, ref y, a, "Settings file");
-        c = Card(g, ref y, a, "\uE8B7", Settings.FilePath, "Everything physmouse remembers is in this plain-text file. To make a portable copy, put a settings.ini next to physmouse.exe.", Measure(g, "Open folder", 0));
-        Button(g, c.Right - 16 * s - Measure(g, "Open folder", 0), c.Y + (c.Height - 32 * s) / 2, "Open folder", false, true, () =>
+        float openW = Measure(g, "Open folder", 0), resetW = Measure(g, "Reset settings", 0);
+        c = Card(g, ref y, a, "\uE8B7", Settings.FilePath, "Preferences and monitor layout are kept in AppData, so they survive updates and reinstalling.", openW + resetW + 8 * s);
+        Button(g, c.Right - 16 * s - openW, c.Y + (c.Height - 32 * s) / 2, "Open folder", false, true, () =>
         {
             if (File.Exists(Settings.FilePath)) Process.Start("explorer.exe", "/select,\"" + Settings.FilePath + "\"");
             else Process.Start("explorer.exe", "\"" + Path.GetDirectoryName(Settings.FilePath) + "\"");
         });
+        Button(g, c.Right - 16 * s - openW - 8 * s - resetW, c.Y + (c.Height - 32 * s) / 2, "Reset settings", false, true, () =>
+        {
+            if (MessageBox.Show(this, "Reset physmouse preferences and monitor layout to Windows defaults? The Windows startup setting will stay as it is.",
+                "Reset settings", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            EndCapture();
+            Program.ResetSettings();
+        });
+        contentHeight = y - a.Y;
+    }
+
+    RectangleF chooseAppsRect;
+
+    void ChooseFullscreenApps()
+    {
+        var anchor = PointToScreen(new Point((int)chooseAppsRect.X, (int)(chooseAppsRect.Bottom - contentScroll)));
+        using (var picker = new AppPickerWindow(Program.Cfg.BlockedApps, anchor))
+            if (picker.ShowDialog(this) == DialogResult.OK)
+            {
+                Program.Cfg.BlockedApps = picker.SelectedApps ?? new string[0];
+                Program.Save();
+            }
     }
 
     void SetStartup(Startup.Mode mode)
@@ -545,7 +681,17 @@ class MainWindow : PaintedWindow
         FillCard(g, head, false);
         using (var icon = Theme.AppIcon((int)(56 * s), false)) g.DrawImage(icon, head.X + 20 * s, head.Y + 20 * s);
         Draw(g, "physmouse", fStrong, t.Text, new RectangleF(head.X + 92 * s, head.Y + 26 * s, 400 * s, 22 * s), TextFormatFlags.Left);
-        Draw(g, "Version " + Program.Version, fCaption, t.TextDim, new RectangleF(head.X + 92 * s, head.Y + 50 * s, 400 * s, 20 * s), TextFormatFlags.Left);
+        bool updateAvailable = Program.UpdateVersion != null;
+        Draw(g, "Version " + Program.Version, fCaption, t.TextDim, new RectangleF(head.X + 92 * s, head.Y + 50 * s, (updateAvailable ? 270 : 400) * s, 20 * s), TextFormatFlags.Left);
+        if (updateAvailable)
+        {
+            float buttonW = Measure(g, "Update", 96 * s), buttonX = head.Right - 16 * s - buttonW;
+            float noticeX = buttonX - 220 * s;
+            Draw(g, "Update available", fStrong, t.Text, new RectangleF(noticeX, head.Y + 20 * s, 210 * s, 20 * s), TextFormatFlags.EndEllipsis);
+            Draw(g, "Version " + Program.Version + " to Version " + Program.UpdateVersion, fCaption, t.TextDim,
+                new RectangleF(noticeX, head.Y + 48 * s, 220 * s, 20 * s), TextFormatFlags.EndEllipsis);
+            Button(g, buttonX, head.Y + 32 * s, "Update", true, true, () => Process.Start(Program.LatestReleaseUrl));
+        }
         y = head.Bottom + 16 * s;
 
         y += DrawWrapped(g,
@@ -556,7 +702,14 @@ class MainWindow : PaintedWindow
         int screens = Mapper.Mons.Count;
         string status = (Program.Cfg.Enabled ? "Remapping is on" : "Remapping is paused") + "  ·  " + screens + (screens == 1 ? " screen" : " screens") + " connected  ·  "
             + (Startup.Elevated ? "running as administrator" : "running without administrator rights");
-        Card(g, ref y, a, "\uE9D9", "Status", status, 0);
+        var statusArea = new RectangleF(a.X, y, a.Width - 198 * s, a.Height);
+        var statusCard = Card(g, ref y, statusArea, "\uE9D9", "Status", status, 0);
+        var replayTile = new RectangleF(statusCard.Right + 8 * s, statusCard.Y, a.Right - statusCard.Right - 8 * s, statusCard.Height);
+        FillCard(g, replayTile, Hot(replayTile) && pressed == null);
+        Draw(g, "\uE72C", fGlyph, t.Text, new RectangleF(replayTile.X + 16 * s, replayTile.Y, 24 * s, replayTile.Height), TextFormatFlags.VerticalCenter);
+        Draw(g, "Replay tutorial", fBody, t.Text, new RectangleF(replayTile.X + 48 * s, replayTile.Y + 7 * s, replayTile.Width - 60 * s, 22 * s), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        DrawWrapped(g, "Run setup guide again", fCaption, t.TextDim, replayTile.X + 48 * s, replayTile.Y + 31 * s, replayTile.Width - 60 * s);
+        hits.Add(new Hit { R = replayTile, Click = ReplayTutorial });
 
         var c = Card(g, ref y, a, "\uE943", "Source code", Program.RepoUrl, Measure(g, "Open", 0));
         Button(g, c.Right - 16 * s - Measure(g, "Open", 0), c.Y + (c.Height - 32 * s) / 2, "Open", false, true, () => Process.Start(Program.RepoUrl));
@@ -569,6 +722,174 @@ class MainWindow : PaintedWindow
             Button(g, c.Right - 16 * s - Measure(g, "Uninstall", 0), c.Y + (c.Height - 32 * s) / 2, "Uninstall", false, true,
                 () => Process.Start(Application.ExecutablePath, "--uninstall"));
         }
+        contentHeight = y - a.Y;
+    }
+
+    void ReplayTutorial()
+    {
+        replayPromptVisible = true;
+        Invalidate();
+    }
+
+    void ScheduleTutorial(bool restartNow)
+    {
+        replayPromptVisible = false;
+        Program.Cfg.WelcomeShown = false;
+        Program.Save();
+        if (restartNow) Program.Restart();
+    }
+
+    void StartTutorial()
+    {
+        replayPromptVisible = false;
+        page = Page.Layout;
+        tutorialStep = 0;
+        tutorialPhase = 0;
+        if (SystemInformation.IsMenuAnimationEnabled) tutorialTimer.Start();
+        Invalidate();
+    }
+
+    void EndTutorial()
+    {
+        tutorialStep = -1;
+        tutorialTimer.Stop();
+        Program.Cfg.WelcomeShown = true;
+        Program.Save();
+        Invalidate();
+    }
+
+    void AdvanceTutorial()
+    {
+        if (tutorialStep < 2) { tutorialStep++; tutorialPhase = 0; Invalidate(); }
+        else EndTutorial();
+    }
+
+    void PaintTutorial(Graphics g)
+    {
+        using (var b = new SolidBrush(Color.FromArgb(t.Dark ? 190 : 150, Color.Black)))
+            g.FillRectangle(b, ClientRectangle);
+        hits.Add(new Hit { R = new RectangleF(0, 60 * s, ClientSize.Width, ClientSize.Height - 60 * s) });
+        PaintAppName(g, "physmouse", !Program.Cfg.Enabled);
+        PaintCaption(g);
+
+        float w = Math.Min(620 * s, ClientSize.Width - 40 * s), h = Math.Min(450 * s, ClientSize.Height - 76 * s);
+        var panel = new RectangleF((ClientSize.Width - w) / 2, (ClientSize.Height - h) / 2, w, h);
+        FillCard(g, panel, false);
+        int step = tutorialStep + 1;
+        Draw(g, "GETTING STARTED     " + step + " / 3", fCaption, t.Accent,
+            new RectangleF(panel.X + 26 * s, panel.Y + 18 * s, w - 52 * s, 18 * s), TextFormatFlags.VerticalCenter);
+        string[] titles = { "Identify your screens", "Arrange them like your desk", "Apply and move naturally" };
+        string[] copy = {
+            "Click Identify to flash matching numbers on each physical display.",
+            "Drag the screen tiles until they match the positions and heights of your monitors.",
+            "Click Apply to use the layout. physmouse lines up cursor crossings by physical height."
+        };
+        Draw(g, titles[tutorialStep], fTitle, t.Text, new RectangleF(panel.X + 26 * s, panel.Y + 40 * s, w - 52 * s, 40 * s), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        DrawWrapped(g, copy[tutorialStep], fBody, t.TextDim, panel.X + 28 * s, panel.Y + 84 * s, w - 56 * s);
+        var demo = new RectangleF(panel.X + 24 * s, panel.Y + 132 * s, w - 48 * s, 188 * s);
+        using (var b = new SolidBrush(t.Canvas)) Fill(g, b, demo, 6 * s);
+        using (var p = new Pen(t.Stroke, 1)) Stroke(g, p, demo, 6 * s);
+        PaintTutorialDemo(g, demo);
+
+        float by = panel.Bottom - 48 * s;
+        Button(g, panel.X + 24 * s, by, "Skip tutorial", false, true, EndTutorial);
+        float nextW = Measure(g, tutorialStep == 2 ? "Finish" : "Next", 96 * s);
+        Button(g, panel.Right - 24 * s - nextW, by, tutorialStep == 2 ? "Finish" : "Next", true, true, AdvanceTutorial);
+        if (tutorialStep > 0)
+            Button(g, panel.Right - 32 * s - nextW - Measure(g, "Back", 0), by, "Back", false, true,
+                () => { tutorialStep--; tutorialPhase = 0; Invalidate(); });
+    }
+
+    void PaintTutorialDemo(Graphics g, RectangleF r)
+    {
+        if (tutorialStep == 0)
+        {
+            int count = Math.Max(1, Math.Min(4, edit.Count));
+            float tw = 76 * s, th = 86 * s, gap = 20 * s;
+            float x = r.X + (r.Width - count * tw - (count - 1) * gap) / 2, y = r.Y + 42 * s;
+            for (int i = 0; i < count; i++)
+            {
+                float pulse = SystemInformation.IsMenuAnimationEnabled ? (float)(2 + 2 * (0.5 + 0.5 * Math.Sin(tutorialPhase * 4 + i))) : 3;
+                var tile = new RectangleF(x + i * (tw + gap), y, tw, th);
+                using (var b = new SolidBrush(t.Tile)) Fill(g, b, tile, 5 * s);
+                using (var p = new Pen(t.Accent, pulse * s)) Stroke(g, p, tile, 5 * s);
+                Draw(g, edit.Count > i ? edit[i].Number.ToString(CultureInfo.InvariantCulture) : (i + 1).ToString(),
+                    fTitle, t.Text, new RectangleF(tile.X, tile.Y + 6 * s, tw, 50 * s), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                Draw(g, "SCREEN " + (i + 1), fCaption, t.TextDim, new RectangleF(tile.X, tile.Bottom - 25 * s, tw, 18 * s), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+            Draw(g, "Match each number to the display that flashes", fCaption, t.TextDim,
+                new RectangleF(r.X + 12 * s, r.Bottom - 28 * s, r.Width - 24 * s, 18 * s), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            return;
+        }
+        if (tutorialStep == 1)
+        {
+            var mons = edit.Take(4).ToList();
+            if (mons.Count == 0) return;
+            double minX = mons.Min(m => m.X), minY = mons.Min(m => m.Y);
+            double spanW = mons.Max(m => m.X + m.W) - minX, spanH = mons.Max(m => m.Y + m.H) - minY;
+            double gapMm = Math.Max(15, spanW * 0.08), rowW = mons.Sum(m => m.W) + gapMm * (mons.Count - 1);
+            float innerW = r.Width - 48 * s, innerH = r.Height - 62 * s;
+            double scale = Math.Min(Math.Min(innerW / rowW, innerH / mons.Max(m => m.H)), Math.Min(innerW / spanW, innerH / spanH));
+            float totalW = (float)(spanW * scale), totalH = (float)(spanH * scale);
+            float tx = r.X + (r.Width - totalW) / 2, ty = r.Y + 30 * s + (innerH - totalH) / 2;
+            float progress = SystemInformation.IsMenuAnimationEnabled ? Math.Min(1, tutorialPhase / 1.7f) : 1;
+            float ease = 1 - (1 - progress) * (1 - progress);
+            float startW = (float)(rowW * scale), sx = r.X + (r.Width - startW) / 2, sy = r.Y + 30 * s + innerH / 2;
+            float cursorX = sx;
+            foreach (var m in mons)
+            {
+                float mw = (float)(m.W * scale), mh = (float)(m.H * scale);
+                var from = new RectangleF(cursorX, sy - mh / 2, mw, mh);
+                var to = new RectangleF(tx + (float)((m.X - minX) * scale), ty + (float)((m.Y - minY) * scale), mw, mh);
+                var tile = new RectangleF(from.X + (to.X - from.X) * ease, from.Y + (to.Y - from.Y) * ease, mw, mh);
+                DrawDemoMonitor(g, tile, m.Number.ToString(CultureInfo.InvariantCulture));
+                cursorX += mw + (float)(gapMm * scale);
+            }
+            Draw(g, "Tiles move into the same arrangement as your desk", fCaption, t.TextDim,
+                new RectangleF(r.X + 12 * s, r.Bottom - 28 * s, r.Width - 24 * s, 18 * s), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            return;
+        }
+
+        float u = SystemInformation.IsMenuAnimationEnabled ? (tutorialPhase % 2.4f) / 2.4f : 0.5f;
+        var left = new RectangleF(r.X + 58 * s, r.Y + 36 * s, 150 * s, 86 * s);
+        var right = new RectangleF(r.X + 290 * s, r.Y + 36 * s, 178 * s, 86 * s);
+        DrawDemoMonitor(g, left, "1");
+        DrawDemoMonitor(g, right, "2");
+        float lineY = left.Y + left.Height * 0.62f;
+        using (var p = new Pen(t.Accent, 2 * s)) g.DrawLine(p, left.X + 32 * s, lineY, right.Right - 24 * s, lineY);
+        float px = left.X + 32 * s + (right.Right - 56 * s - (left.X + 32 * s)) * u;
+        var pointer = new[] { new PointF(px, lineY - 8 * s), new PointF(px, lineY + 10 * s), new PointF(px + 5 * s, lineY + 5 * s), new PointF(px + 9 * s, lineY + 13 * s), new PointF(px + 12 * s, lineY + 11 * s), new PointF(px + 8 * s, lineY + 3 * s), new PointF(px + 15 * s, lineY + 3 * s) };
+        using (var b = new SolidBrush(t.Text)) g.FillPolygon(b, pointer);
+        using (var p = new Pen(t.Bg, 1 * s)) g.DrawPolygon(p, pointer);
+        Draw(g, "Same physical height across both screens", fCaption, t.TextDim,
+            new RectangleF(r.X + 12 * s, r.Bottom - 28 * s, r.Width - 24 * s, 18 * s), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+
+    void DrawDemoMonitor(Graphics g, RectangleF r, string number)
+    {
+        using (var b = new SolidBrush(t.Tile)) Fill(g, b, r, 8 * s);
+        using (var p = new Pen(t.TileStroke, 1)) Stroke(g, p, r, 8 * s);
+        Draw(g, number, fStrong, t.Text, r, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+    }
+
+    void PaintReplayPrompt(Graphics g)
+    {
+        using (var b = new SolidBrush(Color.FromArgb(t.Dark ? 190 : 150, Color.Black)))
+            g.FillRectangle(b, ClientRectangle);
+        hits.Add(new Hit { R = new RectangleF(0, 60 * s, ClientSize.Width, ClientSize.Height - 60 * s) });
+        PaintAppName(g, "physmouse", !Program.Cfg.Enabled);
+        PaintCaption(g);
+        float w = Math.Min(520 * s, ClientSize.Width - 40 * s), h = 280 * s;
+        var panel = new RectangleF((ClientSize.Width - w) / 2, (ClientSize.Height - h) / 2, w, h);
+        FillCard(g, panel, false);
+        Draw(g, "Replay the tutorial?", fTitle, t.Text, new RectangleF(panel.X + 24 * s, panel.Y + 20 * s, w - 48 * s, 40 * s), TextFormatFlags.VerticalCenter);
+        var message = new RectangleF(panel.X + 24 * s, panel.Y + 72 * s, w - 48 * s, 96 * s);
+        FillCard(g, message, false);
+        DrawWrapped(g, "The tutorial will appear the next time physmouse opens. Close and reopen now to see it immediately.",
+            fBody, t.TextDim, message.X + 16 * s, message.Y + 14 * s, message.Width - 32 * s);
+        float by = panel.Bottom - 48 * s, okW = Measure(g, "OK", 96 * s), restartW = Measure(g, "Close and reopen", 0);
+        Button(g, panel.Right - 24 * s - okW, by, "OK", false, true, () => ScheduleTutorial(false));
+        Button(g, panel.Right - 32 * s - okW - restartW, by, "Close and reopen", true, true, () => ScheduleTutorial(true));
     }
 
 
@@ -582,7 +903,11 @@ class MainWindow : PaintedWindow
         if (!editing)
             Draw(g, text, fBody, t.Text, new RectangleF(r.X + 8 * s, r.Y, r.Width - 24 * s - unitW, r.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
         var textArea = new RectangleF(r.X + 8 * s, r.Y, r.Width - 24 * s - unitW, r.Height);
-        hits.Add(new Hit { R = r, Cursor = Cursors.IBeam, Click = () => BeginEdit(textArea, text, commit), Wheel = wheel });
+        hits.Add(new Hit { R = r, Cursor = Cursors.IBeam, Click = () =>
+        {
+            textArea.Y -= contentScroll;
+            BeginEdit(textArea, text, commit);
+        }, Wheel = wheel });
     }
 
     void BeginEdit(RectangleF area, string text, Action<string> commit)

@@ -6,6 +6,7 @@ using System.Text;
 static class Native
 {
     public delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+    public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
     public const int WH_MOUSE_LL = 14, WM_MOUSEMOVE = 0x200, WM_HOTKEY = 0x312, WM_DPICHANGED = 0x02E0, WM_SETICON = 0x80;
     public static readonly IntPtr HWND_MESSAGE = new IntPtr(-3);
@@ -34,6 +35,12 @@ static class Native
     [DllImport("user32")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32")] public static extern short GetAsyncKeyState(int vk);
     [DllImport("user32")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+    [DllImport("user32")] public static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+    [DllImport("user32")] public static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
     [DllImport("user32")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
     [DllImport("user32")] public static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);

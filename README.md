@@ -14,10 +14,11 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 - **Edge behaviour.** Where there's no screen beyond an edge, the cursor either stops there or falls back to Windows' own layout.
 - **Edge resistance.** Optionally require a short push past an edge before the cursor crosses, which keeps it from slipping off while you reach for a scroll bar.
 - **Bypass key.** Hold Shift, Ctrl or Alt to cross the way Windows normally would.
-- **Full-screen lock.** Keeps the cursor on a screen while a game or video fills it. On by default; Alt+Tab or the bypass key gets you out.
+- **Full-screen lock.** Choose which open apps keep the cursor on their screen in full-screen mode. No apps are selected by default; tray-only apps do not appear in the picker.
 - **On/off shortcut.** A global keyboard shortcut that pauses and resumes remapping.
 - **Start with Windows.** Optionally with administrator rights, so the cursor also follows your layout while an elevated window such as Task Manager is in front.
 - **Remembers every screen.** Layouts are stored per physical screen, so unplugging a screen and plugging it back in keeps its place. When a new screen is connected, physmouse asks you to place it.
+- **Settings survive reinstalls.** Preferences and monitor layouts are stored in your user AppData folder and can be reset from General.
 - Follows Windows' light or dark mode and your accent colour.
 
 ## Install
@@ -37,7 +38,7 @@ If you'd rather not install anything, choose **Run portable** instead. physmouse
 
 It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows.
 
-**SmartScreen:** This release is unsigned, so Windows may show a warning that it is not commonly downloaded. Download only from the official GitHub release and verify its SHA-256: 557F6CE8F122780DC56F83C9D1AA10E1C6BE7975A290EC4E3546B453FFC3CD81.
+**SmartScreen:** This release is unsigned, so Windows may show a warning that it is not commonly downloaded. Download only from the official GitHub release and compare its SHA-256 with the value published alongside that release.
 
 ## Settings file
 

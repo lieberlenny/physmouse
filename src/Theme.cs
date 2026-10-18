@@ -3,16 +3,32 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
 using Microsoft.Win32;
+using System.Windows.Forms;
 
 // Colours follow the Windows 11 Settings app: light or dark from the system, accent from the user's accent colour.
 class Theme
 {
-    public bool Dark;
+    public bool Dark, HighContrast;
     public Color Bg, Card, CardHover, Stroke, Text, TextDim, TextOff, Accent, AccentHover, OnAccent,
         Control, ControlHover, ControlDown, ControlStroke, NavSelected, NavHover, Canvas, Grid, Tile, TileStroke, Danger;
 
     public static Theme Current()
     {
+        if (SystemInformation.HighContrast)
+            return new Theme
+            {
+                HighContrast = true,
+                Dark = SystemColors.Window.GetBrightness() < 0.5f,
+                Bg = SystemColors.Window, Card = SystemColors.Window, CardHover = SystemColors.ControlLight,
+                Stroke = SystemColors.WindowFrame, Text = SystemColors.WindowText, TextDim = SystemColors.WindowText,
+                TextOff = SystemColors.GrayText, Accent = SystemColors.Highlight, AccentHover = SystemColors.Highlight,
+                OnAccent = SystemColors.HighlightText, Control = SystemColors.Window, ControlHover = SystemColors.ControlLight,
+                ControlDown = SystemColors.Control, ControlStroke = SystemColors.WindowFrame,
+                NavSelected = SystemColors.Control, NavHover = SystemColors.ControlLight,
+                Canvas = SystemColors.Window, Grid = SystemColors.ControlLight,
+                Tile = SystemColors.Window, TileStroke = SystemColors.WindowFrame, Danger = SystemColors.HotTrack,
+            };
+
         bool dark = false;
         using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
             if (k != null) dark = Convert.ToInt32(k.GetValue("AppsUseLightTheme", 1)) == 0;

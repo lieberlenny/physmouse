@@ -27,7 +27,12 @@ class SetupWindow : PaintedWindow
     protected override bool ProcessCmdKey(ref Message msg, Keys key)
     {
         if (key == Keys.Escape) { Close(); return true; }
-        if (key == Keys.Enter) { Primary(); return true; }
+        if (key == Keys.Enter)
+        {
+            if (base.ProcessCmdKey(ref msg, key)) return true;
+            Primary();
+            return true;
+        }
         return base.ProcessCmdKey(ref msg, key);
     }
 
@@ -113,6 +118,7 @@ class SetupWindow : PaintedWindow
             Button(g, px - 8 * s - Measure(g, "Cancel", 96), by, "Cancel", false, true, Close);
         if (!finished && mode == Mode.Install)
             Button(g, a.X, by, "Run portable", false, true, () => { Result = Outcome.Portable; Close(); });
+        PaintFocusBorder(g);
     }
 
     string PrimaryText()

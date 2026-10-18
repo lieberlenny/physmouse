@@ -6,19 +6,22 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
+using System.Net;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("physmouse")]
 [assembly: AssemblyDescription("Moves the cursor between screens by where they physically sit on your desk.")]
 [assembly: AssemblyProduct("physmouse")]
 [assembly: AssemblyCopyright("Copyright © 2026 Lennart Blees")]
-[assembly: AssemblyVersion("1.0.2.0")]
-[assembly: AssemblyFileVersion("1.0.2.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 static class Program
 {
     public const string RepoUrl = "https://github.com/lieberlenny/physmouse";
+    public const string LatestReleaseUrl = RepoUrl + "/releases/latest";
     public static readonly string Version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+    public static string UpdateVersion { get; private set; }
 
     public static Settings Cfg { get { return Mapper.Cfg; } }
     public static event Action Changed; // monitors or settings changed; the window redraws
@@ -34,6 +37,7 @@ static class Program
     static MainWindow window;
     static SynchronizationContext ui;
     static System.Windows.Forms.Timer settle;
+    static bool restartAfterExit;
 
     [STAThread]
     static int Main(string[] args)
@@ -119,8 +123,9 @@ static class Program
         tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) ShowWindow(); };
         tray.BalloonTipClicked += (s, e) => ShowWindow();
         UpdateTray();
+        CheckForUpdates();
 
-        if (!background || firstRun) ShowWindow();
+        if (!background) ShowWindow();
         Application.Run();
 
         SystemEvents.DisplaySettingsChanged -= DisplayChanged;
@@ -128,6 +133,7 @@ static class Program
         tray.Dispose();
         ipc.DestroyHandle();
         if (mutex != null) mutex.Dispose();
+        if (restartAfterExit) Process.Start(Application.ExecutablePath);
         return 0;
     }
 
@@ -145,7 +151,16 @@ static class Program
         if (window == null || window.IsDisposed) window = new MainWindow();
         window.Show();
         if (window.WindowState == FormWindowState.Minimized) window.WindowState = FormWindowState.Normal;
+        window.BringToFront();
         window.Activate();
+        Native.SetForegroundWindow(window.Handle);
+        UpdateTray();
+    }
+
+    public static void Restart()
+    {
+        restartAfterExit = true;
+        Application.Exit();
     }
 
     // Re-read the connected screens and apply the saved layout to them.
@@ -196,12 +211,52 @@ static class Program
         if (h != null) h();
     }
 
+    public static void ResetSettings()
+    {
+        SetHotkey(Keys.None);
+        var settings = new Settings();
+        settings.Store(Monitors.Detect());
+        Mapper.Cfg = settings;
+        Save();
+        Refresh();
+        UpdateTray();
+    }
+
     public static void UpdateTray()
     {
         tray.Icon = Cfg.Enabled ? iconOn : iconOff;
         tray.Text = Cfg.Enabled ? "physmouse" : "physmouse (paused)";
         trayEnabled.Checked = Cfg.Enabled;
-        tray.Visible = Cfg.TrayIcon;
+        tray.Visible = Cfg.TrayIcon || (window != null && !window.Visible);
+    }
+
+    static void CheckForUpdates()
+    {
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                var request = (HttpWebRequest)WebRequest.Create(LatestReleaseUrl);
+                request.Method = "HEAD";
+                request.UserAgent = "physmouse/" + Version;
+                request.Timeout = 6000;
+                using (var response = request.GetResponse())
+                {
+                    string[] parts = response.ResponseUri.AbsolutePath.Trim('/').Split('/');
+                    System.Version latest;
+                    if (parts.Length < 1 || !System.Version.TryParse(parts[parts.Length - 1].TrimStart('v'), out latest)
+                        || latest <= new System.Version(Version)) return;
+                    ui.Post(__ =>
+                    {
+                        UpdateVersion = latest.ToString(3);
+                        var h = Changed;
+                        if (h != null) h();
+                    }, null);
+                }
+            }
+            catch (WebException) { }
+            catch (InvalidOperationException) { }
+        });
     }
 
     // False when another app already owns that shortcut.
