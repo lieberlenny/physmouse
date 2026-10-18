@@ -81,6 +81,7 @@ static class Installer
                 k.SetValue("DisplayIcon", exe);
                 k.SetValue("InstallLocation", dir);
                 k.SetValue("UninstallString", "\"" + exe + "\" --uninstall");
+                k.SetValue("QuietUninstallString", "\"" + exe + "\" --uninstall --quiet");
                 k.SetValue("URLInfoAbout", Program.RepoUrl);
                 k.SetValue("InstallDate", DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
                 k.SetValue("EstimatedSize", (int)(new FileInfo(exe).Length / 1024), RegistryValueKind.DWord);
@@ -107,10 +108,10 @@ static class Installer
 
     // Removes everything physmouse put on this PC, except its own exe, which is still running;
     // RemoveFiles deletes that once this process has exited.
-    public static string Uninstall(bool keepSettings)
+    public static string Uninstall(bool keepSettings, bool quiet = false)
     {
         if (!StopRunning()) return "physmouse is still running. Quit it from its icon next to the clock, then try again.";
-        string err = Startup.Set(Startup.Mode.Off); // asks for administrator permission if it starts as administrator
+        string err = Startup.Set(Startup.Mode.Off, !quiet); // silent package removal must never raise UAC
         if (err != null) return err;
         try
         {
@@ -139,12 +140,15 @@ static class Installer
         { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = Path.GetTempPath() });
     }
 
+    public static bool StoppedRunningCopy;
+
     // Asks a running physmouse to quit, so its exe can be replaced or removed.
     static bool StopRunning()
     {
         int self = Process.GetCurrentProcess().Id;
         var others = Process.GetProcessesByName("physmouse").Where(p => p.Id != self).ToList();
         if (others.Count == 0) return true;
+        StoppedRunningCopy = true;
         Program.AskRunningCopyToExit();
         foreach (var p in others)
         {

@@ -37,6 +37,8 @@ If you'd rather not install anything, choose **Run portable** instead. physmouse
 
 It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows.
 
+**SmartScreen:** This release is unsigned, so Windows may show a warning that it is not commonly downloaded. Download only from the official GitHub release and verify its SHA-256: 557F6CE8F122780DC56F83C9D1AA10E1C6BE7975A290EC4E3546B453FFC3CD81.
+
 ## Settings file
 
 Everything is stored in `%APPDATA%\physmouse\settings.ini`, a plain-text file that's easy to back up or copy to another PC. For a portable setup, put an empty `settings.ini` next to `physmouse.exe` and physmouse will use that instead.

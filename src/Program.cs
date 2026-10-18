@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -11,8 +12,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Moves the cursor between screens by where they physically sit on your desk.")]
 [assembly: AssemblyProduct("physmouse")]
 [assembly: AssemblyCopyright("Copyright © 2026 Lennart Blees")]
-[assembly: AssemblyVersion("1.0.1.0")]
-[assembly: AssemblyFileVersion("1.0.1.0")]
+[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyFileVersion("1.0.2.0")]
 
 static class Program
 {
@@ -42,16 +43,34 @@ static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Native.AllowDarkMenus();
 
+        // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success.
+        bool quiet = args.Contains("--quiet");
         if (args.Contains("--uninstall"))
         {
+            if (quiet)
+            {
+                bool ok = Installer.Uninstall(true, true) == null; // keeps settings: a silent uninstall shouldn't lose a layout
+                if (ok) Installer.RemoveFiles();
+                return ok ? 0 : 1;
+            }
             var w = new SetupWindow(SetupWindow.Mode.Uninstall);
             Application.Run(w);
             if (w.Result == SetupWindow.Outcome.Done) Installer.RemoveFiles();
             return 0;
         }
+        if (args.Contains("--install") && quiet)
+        {
+            var installed = Installer.InstalledExe;
+            string dir = installed != null ? Path.GetDirectoryName(installed) : Installer.DefaultDir;
+            if (Installer.Install(dir, !args.Contains("--no-autostart"), false, installed != null) != null) return 1;
+            if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background"); // an upgrade shouldn't leave it off
+            return 0;
+        }
 
         // Started by hand from a download: offer to install (or update) before anything else.
-        var offer = background ? Installer.Offer.None : Installer.Check();
+        var offer = background ? Installer.Offer.None
+            : args.Contains("--install") ? (Installer.InstalledExe != null ? Installer.Offer.Update : Installer.Offer.Install)
+            : Installer.Check();
         if (offer != Installer.Offer.None)
         {
             var w = new SetupWindow(offer == Installer.Offer.Install ? SetupWindow.Mode.Install : SetupWindow.Mode.Update);

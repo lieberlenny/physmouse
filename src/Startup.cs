@@ -40,7 +40,7 @@ static class Startup
     }
 
     // Returns null on success, otherwise a message for the user.
-    public static string Set(Mode mode)
+    public static string Set(Mode mode, bool elevate = true)
     {
         var was = Current();
         if (mode == Mode.Admin && was != Mode.Admin)
@@ -50,7 +50,7 @@ static class Startup
         }
         if (mode != Mode.Admin && was == Mode.Admin)
         {
-            string err = Schtasks("/Delete /TN physmouse /F", true);
+            string err = Schtasks("/Delete /TN physmouse /F", elevate);
             if (err != null) return err;
         }
         SetRunEntry(mode == Mode.User);
