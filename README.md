@@ -1,9 +1,11 @@
+# **Disclaimer | SmartScreen & Antivirus** 
+This release is unsigned, so Windows and/or Third-Party Antivirus Software (Bitdefender Web Protection flagged the file download for me) may show a warning that it is not safe to download or run. Download only from the official GitHub release and compare its SHA-256 with the value published alongside that release.
+
 # physmouse
 
 Windows lines your screens up by their pixels. If your screens differ in size, resolution or height on the desk, the cursor jumps up or down as it crosses from one to the next, or gets stuck where the pixel edges don't line up.
 
 physmouse fixes that. You tell it where your screens actually sit on your desk, and it moves the cursor between them by real distance, so it leaves one screen and enters the next at the same physical spot.
-
 
 ## Features
 
@@ -36,9 +38,6 @@ To uninstall, use Settings > Apps > Installed apps, or **Uninstall** on physmous
 If you'd rather not install anything, choose **Run portable** instead. physmouse then keeps its settings next to the exe and doesn't touch the Start menu or startup entries until you turn them on.
 
 It needs Windows 10 or 11 and the .NET Framework 4.8, which is part of Windows.
-
-## **Disclaimer | SmartScreen** 
-This release is unsigned, so Windows may show a warning that it is not commonly downloaded. Download only from the official GitHub release and compare its SHA-256 with the value published alongside that release.
 
 ## Settings file
 
