@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MSIX manifest for the Microsoft Store. Before packing a Store build, copy Name, Publisher and
-     PublisherDisplayName from Partner Center > physmouse > Product identity, and keep Version in step
-     with AssemblyVersion in src/Program.cs (the last number must stay 0). -->
+<!-- MSIX manifest for the Microsoft Store. Name, Publisher and PublisherDisplayName come from
+     Partner Center > physmouse > Product identity. Keep Version in step with AssemblyVersion in
+     src/Program.cs (the last number must stay 0). -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -10,7 +10,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap10 desktop rescap">
 
-  <Identity Name="LieberLenny.physmouse" Publisher="CN=00000000-0000-0000-0000-000000000000" Version="1.2.0.0" ProcessorArchitecture="x64" />
+  <Identity Name="LennartBlees.physmouse" Publisher="CN=49D56209-A679-4CD8-A24A-B369B8392F66" Version="1.2.0.0" ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>physmouse</DisplayName>
