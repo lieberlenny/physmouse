@@ -26,7 +26,7 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 
 ## Resource usage
 
-physmouse stays out of the way in the background: about 0.1% CPU, around 8 MB of memory and no network traffic in Task Manager. It only steps in when the cursor crosses a screen edge.
+physmouse stays out of the way in the background: about 0.1% CPU, around 8 MB of memory and no network traffic in Task Manager (measured on an AMD Ryzen 7 9850X3D, 32 GB DDR5-6000 CL36, Windows 11 26H2). It only steps in when the cursor crosses a screen edge.
 
 ![Task Manager: physmouse at 0.1% CPU, 0% GPU, 8.1 MB memory and 0 Mbps network](assets/task-manager.png)
 
