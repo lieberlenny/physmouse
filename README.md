@@ -24,6 +24,12 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 - **Remembers every screen.** Layouts are stored per physical screen, so unplugging a screen and plugging it back in keeps its place. When a new screen is connected, physmouse asks you to place it.
 - Follows Windows' light or dark mode and your accent colour.
 
+## Resource usage
+
+physmouse stays out of the way in the background: about 0.1% CPU, around 8 MB of memory and no network traffic in Task Manager. It only steps in when the cursor crosses a screen edge.
+
+![Task Manager: physmouse at 0.1% CPU, 0% GPU, 8.1 MB memory and 0 Mbps network](assets/task-manager.png)
+
 ## Install
 
 1. Download `physmouse.exe` from the [latest release](../../releases/latest) and run it.
