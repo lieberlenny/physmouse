@@ -3,6 +3,8 @@ This release is unsigned, so Windows and/or Third-Party Antivirus Software (Bitd
 
 # physmouse
 
+<a href="https://alternativeto.net/software/physmouse/about/?utm_source=badge&utm_medium=referral"><img src="https://alternativeto.net/static/badges/badge-compact-dark.svg" alt="physmouse | AlternativeTo" width="244" height="83"></a>
+
 Windows lines your screens up by their pixels. If your screens differ in size, resolution or height on the desk, the cursor jumps up or down as it crosses from one to the next, or gets stuck where the pixel edges don't line up.
 
 physmouse fixes that. You tell it where your screens actually sit on your desk, and it moves the cursor between them by real distance, so it leaves one screen and enters the next at the same physical spot.
