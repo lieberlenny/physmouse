@@ -3,7 +3,7 @@ This release is unsigned, so Windows and/or Third-Party Antivirus Software (Bitd
 
 # physmouse
 
-<a href="https://alternativeto.net/software/physmouse/about/?utm_source=badge&utm_medium=referral"><img src="https://alternativeto.net/static/badges/badge-compact-dark.svg" alt="physmouse | AlternativeTo" width="244" height="83"></a>
+<a href="https://apps.microsoft.com/detail/9P31NQHKW1NR"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="220" height="60"></a> <a href="https://alternativeto.net/software/physmouse/about/?utm_source=badge&utm_medium=referral"><img src="https://alternativeto.net/static/badges/badge-compact-dark.svg" alt="physmouse | AlternativeTo" width="244" height="83"></a>
 
 Windows lines your screens up by their pixels. If your screens differ in size, resolution or height on the desk, the cursor jumps up or down as it crosses from one to the next, or gets stuck where the pixel edges don't line up.
 
@@ -31,6 +31,8 @@ physmouse stays out of the way in the background: about 0.1% CPU, around 8 MB of
 ![Task Manager: physmouse at 0.1% CPU, 0% GPU, 8.1 MB memory and 0 Mbps network](assets/task-manager.png)
 
 ## Install
+
+The easiest way is the [Microsoft Store](https://apps.microsoft.com/detail/9P31NQHKW1NR), which installs and updates physmouse for you. The Store version can't start with administrator rights, so it can't move the cursor while an elevated window such as Task Manager is in front. To install it from GitHub instead:
 
 1. Download `physmouse.exe` from the [latest release](../../releases/latest) and run it.
 2. Click **Install**. physmouse installs for your user account only, into `%LOCALAPPDATA%\Programs\physmouse`. You can change the folder and choose whether it starts with Windows and gets a desktop shortcut.
