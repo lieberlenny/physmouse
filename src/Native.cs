@@ -66,6 +66,7 @@ static class Native
     [DllImport("user32")] public static extern int GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32", CharSet = CharSet.Unicode)] public static extern bool EnumDisplayDevices(string device, int index, ref DISPLAY_DEVICE dd, int flags);
     [DllImport("kernel32", CharSet = CharSet.Unicode)] public static extern IntPtr GetModuleHandle(string name);
+    [DllImport("kernel32", CharSet = CharSet.Unicode)] public static extern int GetCurrentPackageFamilyName(ref int length, StringBuilder name);
     [DllImport("gdi32", CharSet = CharSet.Unicode)] public static extern IntPtr CreateDC(string driver, string device, string output, IntPtr init);
     [DllImport("gdi32")] public static extern int GetDeviceCaps(IntPtr dc, int index);
     [DllImport("gdi32")] public static extern bool DeleteDC(IntPtr dc);

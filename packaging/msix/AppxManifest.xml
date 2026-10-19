@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MSIX manifest for the Microsoft Store. Before packing a Store build, copy Name, Publisher and
+     PublisherDisplayName from Partner Center > physmouse > Product identity, and keep Version in step
+     with AssemblyVersion in src/Program.cs (the last number must stay 0). -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 desktop rescap">
+
+  <Identity Name="LieberLenny.physmouse" Publisher="CN=00000000-0000-0000-0000-000000000000" Version="1.2.0.0" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>physmouse</DisplayName>
+    <PublisherDisplayName>Lennart Blees</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="physmouse" Executable="physmouse.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="physmouse" Description="Moves the cursor between screens by where they physically sit on your desk."
+        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- Windows owns this entry: the user turns it off under Settings > Apps > Startup. -->
+        <desktop:Extension Category="windows.startupTask" Executable="physmouse.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--background">
+          <desktop:StartupTask TaskId="physmouse" Enabled="true" DisplayName="physmouse" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

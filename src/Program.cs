@@ -23,6 +23,23 @@ static class Program
     public static readonly string Version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
     public static string UpdateVersion { get; private set; }
 
+    // Set when running as the Microsoft Store (MSIX) package. The Store installs, updates and removes the app,
+    // and Windows owns its startup entry, so the self-installer, update check and startup options stay off.
+    public static readonly string PackageFamily = GetPackageFamily();
+    public static bool Packaged { get { return PackageFamily != null; } }
+
+    static string GetPackageFamily()
+    {
+        try
+        {
+            int len = 0;
+            if (Native.GetCurrentPackageFamilyName(ref len, null) != 122) return null; // ERROR_INSUFFICIENT_BUFFER; 15700 = no package
+            var sb = new System.Text.StringBuilder(len);
+            return Native.GetCurrentPackageFamilyName(ref len, sb) == 0 ? sb.ToString() : null;
+        }
+        catch (EntryPointNotFoundException) { return null; }
+    }
+
     public static Settings Cfg { get { return Mapper.Cfg; } }
     public static event Action Changed; // monitors or settings changed; the window redraws
 
@@ -49,7 +66,7 @@ static class Program
 
         // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success.
         bool quiet = args.Contains("--quiet");
-        if (args.Contains("--uninstall"))
+        if (args.Contains("--uninstall") && !Packaged)
         {
             if (quiet)
             {
@@ -62,7 +79,7 @@ static class Program
             if (w.Result == SetupWindow.Outcome.Done) Installer.RemoveFiles();
             return 0;
         }
-        if (args.Contains("--install") && quiet)
+        if (args.Contains("--install") && quiet && !Packaged)
         {
             var installed = Installer.InstalledExe;
             string dir = installed != null ? Path.GetDirectoryName(installed) : Installer.DefaultDir;
@@ -72,7 +89,7 @@ static class Program
         }
 
         // Started by hand from a download: offer to install (or update) before anything else.
-        var offer = background ? Installer.Offer.None
+        var offer = background || Packaged ? Installer.Offer.None
             : args.Contains("--install") ? (Installer.InstalledExe != null ? Installer.Offer.Update : Installer.Offer.Install)
             : Installer.Check();
         if (offer != Installer.Offer.None)
@@ -98,7 +115,7 @@ static class Program
         Mapper.Cfg = Settings.Load();
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
-        if (Installer.InstalledExe == null || Installer.RunningInstalled)
+        if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
             try { Startup.Reconcile(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
@@ -123,7 +140,7 @@ static class Program
         tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) ShowWindow(); };
         tray.BalloonTipClicked += (s, e) => ShowWindow();
         UpdateTray();
-        CheckForUpdates();
+        if (!Packaged) CheckForUpdates();
 
         if (!background) ShowWindow();
         Application.Run();

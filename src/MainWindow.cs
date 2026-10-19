@@ -201,7 +201,7 @@ class MainWindow : PaintedWindow
         ClearKeyboardFocus();
         contentScroll = contentHeight = contentMax = 0;
         hotkeyError = startupError = null;
-        if (p == Page.General) startMode = Startup.Current();
+        if (p == Page.General && !Program.Packaged) startMode = Startup.Current();
         Invalidate();
     }
 
@@ -563,12 +563,23 @@ class MainWindow : PaintedWindow
         var cfg = Program.Cfg;
         float y = a.Y;
         Group(g, ref y, a, "Startup");
-        string[] startItems = { "Off", "On", "On, as administrator" };
-        string startDesc = startMode == Startup.Mode.Off ? "physmouse only runs when you open it."
-            : startMode == Startup.Mode.User ? "Starts in the background when you sign in."
-            : "Starts with administrator rights when you sign in, so the cursor also follows your layout while an elevated app such as Task Manager is in front.";
-        var c = Card(g, ref y, a, "\uE7E8", "Start with Windows", startDesc, ComboWidth(g, startItems), startupError);
-        Combo(g, c, startItems, (int)startMode, i => SetStartup((Startup.Mode)i));
+        RectangleF c;
+        if (Program.Packaged)
+        {
+            // The Store version's startup entry belongs to Windows (the package's startup task).
+            float openW0 = Measure(g, "Open", 0);
+            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", "Windows manages this for the Store version. physmouse starts when you sign in unless you turn it off under Startup apps.", openW0);
+            Button(g, c.Right - 16 * s - openW0, c.Y + (c.Height - 32 * s) / 2, "Open", false, true, () => Process.Start("ms-settings:startupapps"));
+        }
+        else
+        {
+            string[] startItems = { "Off", "On", "On, as administrator" };
+            string startDesc = startMode == Startup.Mode.Off ? "physmouse only runs when you open it."
+                : startMode == Startup.Mode.User ? "Starts in the background when you sign in."
+                : "Starts with administrator rights when you sign in, so the cursor also follows your layout while an elevated app such as Task Manager is in front.";
+            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", startDesc, ComboWidth(g, startItems), startupError);
+            Combo(g, c, startItems, (int)startMode, i => SetStartup((Startup.Mode)i));
+        }
 
         Group(g, ref y, a, "Controls");
         c = Card(g, ref y, a, "\uE75B", "Notification area icon", "Shows physmouse next to the clock. If you hide it, open physmouse from Start to get back here.", ToggleWidth(g));
@@ -587,11 +598,12 @@ class MainWindow : PaintedWindow
 
         Group(g, ref y, a, "Settings file");
         float openW = Measure(g, "Open folder", 0), resetW = Measure(g, "Reset settings", 0);
-        c = Card(g, ref y, a, "\uE8B7", Settings.FilePath, "Preferences and monitor layout are kept in AppData, so they survive updates and reinstalling.", openW + resetW + 8 * s);
+        string settingsPath = Settings.DiskPath;
+        c = Card(g, ref y, a, "\uE8B7", settingsPath, "Preferences and monitor layout are kept in AppData, so they survive updates and reinstalling.", openW + resetW + 8 * s);
         Button(g, c.Right - 16 * s - openW, c.Y + (c.Height - 32 * s) / 2, "Open folder", false, true, () =>
         {
-            if (File.Exists(Settings.FilePath)) Process.Start("explorer.exe", "/select,\"" + Settings.FilePath + "\"");
-            else Process.Start("explorer.exe", "\"" + Path.GetDirectoryName(Settings.FilePath) + "\"");
+            if (File.Exists(settingsPath)) Process.Start("explorer.exe", "/select,\"" + settingsPath + "\"");
+            else Process.Start("explorer.exe", "\"" + Path.GetDirectoryName(settingsPath) + "\"");
         });
         Button(g, c.Right - 16 * s - openW - 8 * s - resetW, c.Y + (c.Height - 32 * s) / 2, "Reset settings", false, true, () =>
         {

@@ -24,6 +24,19 @@ class Settings
 
     public bool Existed;
 
+    // Where the file really is on disk. MSIX redirects AppData writes into the package's own folder,
+    // so Explorer (which runs outside the package) needs that path instead.
+    public static string DiskPath
+    {
+        get
+        {
+            if (!Program.Packaged) return FilePath;
+            string own = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Packages", Program.PackageFamily, "LocalCache", "Roaming", "physmouse", "settings.ini");
+            return File.Exists(own) ? own : FilePath; // until the first save it still reads an existing file in the real AppData
+        }
+    }
+
     public static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "physmouse", "settings.ini");
 
     public static Settings Load()
