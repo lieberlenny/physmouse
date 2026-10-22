@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Moves the cursor between screens by where they physically sit on your desk.")]
 [assembly: AssemblyProduct("physmouse")]
 [assembly: AssemblyCopyright("Copyright © 2026 Lennart Blees")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 
 static class Program
 {
