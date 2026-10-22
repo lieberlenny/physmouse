@@ -33,6 +33,7 @@ static class Native
     [DllImport("user32")] public static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
     [DllImport("user32")] public static extern bool GetCursorPos(out Point p);
     [DllImport("user32")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32")] public static extern bool GetClipCursor(out RECT r);
     [DllImport("user32")] public static extern short GetAsyncKeyState(int vk);
     [DllImport("user32")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32")] public static extern bool SetForegroundWindow(IntPtr hwnd);

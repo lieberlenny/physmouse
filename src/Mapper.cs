@@ -72,6 +72,11 @@ static class Mapper
             if (!Plan(Mons, cur, info.pt, out mv)) pushed = 0;
             else
             {
+                // An app that confines the cursor (exclusive full-screen games) wins: Windows would clamp
+                // SetCursorPos into its area, landing the cursor in a corner instead of on the other screen.
+                Native.RECT clip;
+                if (mv.To != null && Native.GetClipCursor(out clip)
+                    && !Rectangle.FromLTRB(clip.Left, clip.Top, clip.Right, clip.Bottom).Contains(mv.Target)) mv.To = null;
                 bool locked = cfg.LockFullscreen && FullscreenOn(mv.From, cfg.BlockedApps);
                 if (mv.To != null || locked || cfg.HoldAtEdge)
                 {
