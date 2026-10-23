@@ -2,7 +2,7 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
-## Unreleased
+## 1.3.1 (2026-10-23)
 
 ### Security
 - Removed the "On, as administrator" startup option. Its Task Scheduler task started `physmouse.exe` with highest privileges from the per-user install folder, which any program running as the user can write to, so it could be used to get around UAC. An existing task is removed the next time it starts physmouse, and replaced by a normal startup entry.
