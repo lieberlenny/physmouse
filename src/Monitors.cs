@@ -32,7 +32,8 @@ static class Monitors
             Describe(s.DeviceName, out id, out model);
             int dup = list.Count(m => m.Id == id || m.Id.StartsWith(id + "~"));
             if (dup > 0) id += "~" + (dup + 1); // same EDID twice, e.g. one panel split into two displays
-            var mon = new Mon { Id = id, Model = model, Number = Number(s.DeviceName), R = s.Bounds, Primary = s.Primary };
+            // DISPLAYn digits drift (e.g. 11, 12, 13 after a driver reinstall); show 1..N in the same order.
+            var mon = new Mon { Id = id, Model = model, Number = list.Count + 1, R = s.Bounds, Primary = s.Primary };
             Guess(mon, s.DeviceName);
             list.Add(mon);
         }
