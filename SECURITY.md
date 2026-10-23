@@ -6,7 +6,7 @@ Only the latest release gets security fixes, on GitHub and in the Microsoft Stor
 
 ## Reporting a vulnerability
 
-Please don't open a public issue for security problems. Report them privately instead: on GitHub, open the **Security** tab of this repository and choose **Report a vulnerability**. Only the maintainer can see the report.
+Please don't open a public issue for security problems. Report them privately instead, through GitHub's private vulnerability reporting: https://github.com/lieberlenny/physmouse/security/advisories/new (or the **Security** tab of this repository, then **Report a vulnerability**). Only the maintainer can see the report.
 
 Please include:
 
@@ -14,7 +14,16 @@ Please include:
 - your Windows version
 - what an attacker can do, and the steps to reproduce it
 
-You'll get an answer in the report. Once a fix is released, the report is published as a security advisory, crediting you if you like.
+## Disclosure process
+
+physmouse is maintained by one person in their spare time, so this is best effort, but security reports come first.
+
+1. You get an answer in the private report, confirming whether the issue is reproduced and in scope.
+2. The fix is developed privately in the advisory, and you're welcome to test it.
+3. A fixed release is published on GitHub and submitted to the Microsoft Store and WinGet.
+4. The vulnerability is then disclosed publicly as a GitHub security advisory (with a CVE where it applies), crediting you if you like.
+
+Please keep the vulnerability private until the advisory is published. If a fix takes unusually long, we'll agree on a disclosure date in the report.
 
 ## Scope
 

@@ -1,0 +1,8 @@
+# Keeps the commit-pinned GitHub Actions up to date with weekly pull requests.
+# physmouse has no other dependencies.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -59,11 +59,17 @@ jobs:
           "asset=$asset" >> $env:GITHUB_OUTPUT
 
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: attest
         with:
           subject-path: ${{ steps.prep.outputs.asset }}
 
+      # The same attestation also goes on the release as a file, so it can be checked offline
+      # (and OpenSSF Scorecard's Signed-Releases check finds it).
       - name: Publish the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "${{ steps.prep.outputs.asset }}" --title "Release ${{ github.ref_name }}" --notes-file notes.md --verify-tag
+        run: |
+          $provenance = "${{ steps.prep.outputs.asset }}.intoto.jsonl"
+          Copy-Item "${{ steps.attest.outputs.bundle-path }}" $provenance
+          gh release create "${{ github.ref_name }}" "${{ steps.prep.outputs.asset }}" $provenance --title "Release ${{ github.ref_name }}" --notes-file notes.md --verify-tag
