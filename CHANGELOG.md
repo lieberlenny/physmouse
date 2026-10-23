@@ -2,6 +2,19 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
+## Unreleased
+
+### Security
+- Removed the "On, as administrator" startup option. Its Task Scheduler task started `physmouse.exe` with highest privileges from the per-user install folder, which any program running as the user can write to, so it could be used to get around UAC. An existing task is removed the next time it starts physmouse, and replaced by a normal startup entry.
+
+### Fixed
+- A `settings.ini` with NaN, infinity or absurd sizes in the layout (or typing such values into the editor) could hang the layout editor. Layout values are now limited to what a desk can hold (positions within ±100 m, sizes 20 mm to 20 m); anything else is ignored.
+- Mouse buttons are no longer accepted as the on/off shortcut key in `settings.ini`.
+
+### Changed
+- Start with Windows is a simple on/off toggle in the GitHub version too.
+- The `DisableElevatedStartup` policy is no longer needed and is ignored.
+
 ## 1.3.0 (2026-10-23)
 
 ### Added
