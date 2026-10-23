@@ -3,7 +3,7 @@ This release is unsigned, so Windows and/or Third-Party Antivirus Software (Bitd
 
 # physmouse
 
-<a href="https://apps.microsoft.com/detail/9P31NQHKW1NR"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="220" height="60"></a> <a href="https://alternativeto.net/software/physmouse/about/?utm_source=badge&utm_medium=referral"><img src="https://alternativeto.net/static/badges/badge-compact-dark.svg" alt="physmouse | AlternativeTo" width="244" height="83"></a> <a href="https://scorecard.dev/viewer/?uri=github.com/lieberlenny/physmouse"><img src="https://api.scorecard.dev/projects/github.com/lieberlenny/physmouse/badge" alt="OpenSSF Scorecard"></a>
+<a href="https://apps.microsoft.com/detail/9P31NQHKW1NR"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="220" height="60"></a> <a href="https://alternativeto.net/software/physmouse/about/?utm_source=badge&utm_medium=referral"><img src="https://alternativeto.net/static/badges/badge-compact-dark.svg" alt="physmouse | AlternativeTo" width="176" height="60"></a>
 
 Windows lines your screens up by their pixels. If your screens differ in size, resolution or height on the desk, the cursor jumps up or down as it crosses from one to the next, or gets stuck where the pixel edges don't line up.
 
@@ -62,6 +62,8 @@ physmouse installs a low-level mouse hook on its own high-priority thread. When 
 The hook only sees input that Windows lets it see. Windows doesn't pass mouse input to a normal app's hook while an elevated app is in front, so without administrator rights physmouse can't remap the cursor then. That's what the "On, as administrator" startup option is for: it registers a sign-in task in Task Scheduler instead of a normal startup entry, so there's no UAC prompt at every sign-in.
 
 ## Security & enterprise
+
+<a href="https://scorecard.dev/viewer/?uri=github.com/lieberlenny/physmouse"><img src="https://api.scorecard.dev/projects/github.com/lieberlenny/physmouse/badge" alt="OpenSSF Scorecard"></a>
 
 This section is for anyone reviewing physmouse before rolling it out, for example through Intune. To report a vulnerability, see [SECURITY.md](SECURITY.md). What changed between versions is in [CHANGELOG.md](CHANGELOG.md).
 
