@@ -2,7 +2,7 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
-## Unreleased
+## 1.3.0 (2026-10-23)
 
 ### Added
 - Admin policy under `HKLM\SOFTWARE\Policies\physmouse`: `DisableUpdateCheck`, `DisableElevatedStartup`, `DisableAutostart`, `ForceAutostart`, `DisableSelfInstaller` and `DefaultSettings`. See README > Security & enterprise.
