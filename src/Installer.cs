@@ -93,7 +93,7 @@ static class Installer
             Startup.CreateShortcut(Startup.StartMenuShortcut);
             if (desktopShortcut) Startup.CreateShortcut(Startup.DesktopShortcut);
             if (update) Startup.Reconcile();
-            else if (Startup.Current() != Startup.Mode.Admin) // an elevated task already points here and needs no change
+            else
             {
                 string err = Startup.Set(Startup.Policed(startWithWindows ? Startup.Mode.User : Startup.Mode.Off));
                 if (err != null) return err;

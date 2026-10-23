@@ -20,7 +20,7 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 - **Bypass key.** Hold Shift, Ctrl or Alt to cross the way Windows normally would.
 - **Full-screen lock.** Choose which open apps keep the cursor on their screen in full-screen mode. No apps are selected by default.
 - **On/off shortcut.** A global keyboard shortcut that pauses and resumes remapping.
-- **Start with Windows.** Optionally with administrator rights, so the cursor also follows your layout while an elevated window such as Task Manager is in front.
+- **Start with Windows.** Off by default; turn it on during setup or under General.
 - **Remembers every screen.** Layouts are stored per physical screen, so unplugging a screen and plugging it back in keeps its place. When a new screen is connected, physmouse asks you to place it.
 - Follows Windows' light or dark mode and your accent colour.
 
@@ -32,7 +32,7 @@ physmouse stays out of the way in the background: about 0.1% CPU, around 8 MB of
 
 ## Install
 
-The easiest way is the [Microsoft Store](https://apps.microsoft.com/detail/9P31NQHKW1NR), which installs and updates physmouse for you. The Store version can't start with administrator rights, so it can't move the cursor while an elevated window such as Task Manager is in front. Like the GitHub version, it only starts with Windows once you turn that on under **General > Start with Windows**. To install it from GitHub instead:
+The easiest way is the [Microsoft Store](https://apps.microsoft.com/detail/9P31NQHKW1NR), which installs and updates physmouse for you. Like the GitHub version, it only starts with Windows once you turn that on under **General > Start with Windows**. To install it from GitHub instead:
 
 1. Download `physmouse-v<version>-installer.exe` from the [latest release](../../releases/latest) and run it. Releases are built by GitHub Actions from the tagged commit. To check that your download is that build, run `gh attestation verify physmouse-v<version>-installer.exe -R lieberlenny/physmouse`, or compare its SHA-256 with the one in the release notes.
 2. Click **Install**. physmouse installs for your user account only, into `%LOCALAPPDATA%\Programs\physmouse`. You can change the folder and choose whether it starts with Windows (off by default) and gets a desktop shortcut.
@@ -59,7 +59,9 @@ The screen id is the EDID product code plus the port the screen is connected to.
 
 physmouse installs a low-level mouse hook on its own high-priority thread. When a mouse movement would take the cursor off its current screen, physmouse converts the exit point to millimetres on the desk, finds the screen across from it, and places the cursor at the matching point there. Movement within a screen passes straight through untouched.
 
-The hook only sees input that Windows lets it see. Windows doesn't pass mouse input to a normal app's hook while an elevated app is in front, so without administrator rights physmouse can't remap the cursor then. That's what the "On, as administrator" startup option is for: it registers a sign-in task in Task Scheduler instead of a normal startup entry, so there's no UAC prompt at every sign-in.
+The hook only sees input that Windows lets it see. Windows doesn't pass mouse input to a normal app's hook while an app running as administrator (such as Task Manager) is in front, so physmouse can't remap the cursor then. Windows' own pixel layout applies until you switch to another window.
+
+**Why there's no "run as administrator" option anymore.** Up to 1.3.0, physmouse could start with administrator rights at sign-in through a Task Scheduler task. That task ran `physmouse.exe` from the per-user install folder, which any program running as you can write to without administrator rights. Malware could have replaced the exe and then been started with full rights at the next sign-in, without a UAC prompt. The option is gone, and an existing task is removed: the next time it starts physmouse at sign-in, physmouse deletes it and adds a normal startup entry instead. If you need remapping over elevated windows for a while, quit physmouse and start it with **Run as administrator**; that copy runs until you quit it or sign out.
 
 ## Security & enterprise
 
@@ -86,10 +88,9 @@ This section is for anyone reviewing physmouse before rolling it out, for exampl
 | Apps & features entry | `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\physmouse` | install |
 | Start menu shortcut, optional desktop shortcut | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\physmouse.lnk`, `Desktop\physmouse.lnk` | install |
 | Settings and layout | `%APPDATA%\physmouse\settings.ini`, or `settings.ini` next to the exe in portable mode (Store: the package's `LocalCache\Roaming\physmouse`) | first start, every change |
-| Start with Windows: "On" | value `physmouse` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and `...\Explorer\StartupApproved\Run` | only when turned on |
-| Start with Windows: "On, as administrator" | Task Scheduler task `\physmouse` (logon trigger, highest privileges; needs one UAC prompt to create) | only when turned on |
+| Start with Windows | value `physmouse` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and `...\Explorer\StartupApproved\Run` | only when turned on |
 
-Nothing is written to `HKLM` or to `Program Files`, and setup never needs administrator rights.
+Nothing is written to `HKLM` or to `Program Files`, setup never needs administrator rights, and physmouse never asks for them. Versions up to 1.3.0 could also register a Task Scheduler task `\physmouse` with highest privileges; current versions remove it (see [How it works](#how-it-works)).
 
 ### Silent install and uninstall
 
@@ -103,7 +104,7 @@ physmouse installs per user, so deploy it in the **user** context (Intune Win32 
 
 - A silent install creates the Start menu shortcut and nothing else. It doesn't start physmouse. Start with Windows stays off unless you pass `--autostart` or set the `ForceAutostart` policy.
 - An upgrade keeps the install folder, the settings and the current startup choice. If physmouse was running, it is restarted.
-- A silent uninstall never shows a UAC prompt. It fails (exit code 1) if the user had chosen "On, as administrator", because a standard user can't remove that task.
+- A silent uninstall never shows a UAC prompt. It fails (exit code 1) only if an elevated task from version 1.3.0 or older is still registered, because a standard user can't remove that task.
 - **Detection rule:** registry `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\physmouse`, value `DisplayVersion`, string comparison *equals* the deployed version (for example `1.2.1`). Alternatively, the file `%LOCALAPPDATA%\Programs\physmouse\physmouse.exe` with a file version of at least that version.
 
 ### Admin policy
@@ -113,11 +114,12 @@ Values under `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\physmouse` override what the 
 | Value | Type | Effect |
 |---|---|---|
 | `DisableUpdateCheck` | DWORD `1` | No update check against GitHub. |
-| `DisableElevatedStartup` | DWORD `1` | "On, as administrator" can't be chosen. An existing elevated task is replaced by a normal startup entry the next time an elevated copy of physmouse runs. |
 | `DisableAutostart` | DWORD `1` | Start with Windows is off and can't be turned on. Wins over `ForceAutostart`. |
-| `ForceAutostart` | DWORD `1` | Start with Windows is on (without administrator rights) and can't be turned off. |
+| `ForceAutostart` | DWORD `1` | Start with Windows is on and can't be turned off. |
+
+`DisableElevatedStartup` from 1.3.0 is no longer needed, because the elevated startup option is gone; it's ignored.
 | `DisableSelfInstaller` | DWORD `1` | The downloaded exe no longer offers to install or update itself, and About no longer shows **Uninstall**. The command-line switches above keep working. |
-| `DefaultSettings` | String | Path to a `settings.ini` (environment variables allowed) that is used as the starting point for users who have no settings yet, for example a preset layout or options. |
+| `DefaultSettings` | String | Path to a `settings.ini` (environment variables allowed) that is used as the starting point for users who have no settings yet, for example a preset layout or options. Prefer a local path: if a network share can't be reached, the first start waits for Windows' network timeout (about 20 seconds). |
 
 In the Store version, `DisableAutostart` and `ForceAutostart` turn the package's startup task off or on. Windows' own app policies still apply.
 

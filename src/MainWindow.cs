@@ -387,17 +387,18 @@ class MainWindow : PaintedWindow
     {
         double v;
         text = text.Trim().Replace(',', '.');
-        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out v)) return;
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out v) || double.IsNaN(v) || double.IsInfinity(v)) return;
         SetFieldMm(key, Program.Cfg.Inches ? v * 25.4 : v);
     }
 
     void SetFieldMm(string key, double mm)
     {
         if (sel == null) return;
-        if (key == "X") sel.X = mm;
-        else if (key == "Y") sel.Y = mm;
-        else if (key == "W") sel.W = Math.Max(20, mm);
-        else sel.H = Math.Max(20, mm);
+        double pos = Math.Max(-Settings.MaxPosition, Math.Min(Settings.MaxPosition, mm)), size = Math.Max(Settings.MinSize, Math.Min(Settings.MaxSize, mm));
+        if (key == "X") sel.X = pos;
+        else if (key == "Y") sel.Y = pos;
+        else if (key == "W") sel.W = size;
+        else sel.H = size;
         dirty = true;
         Invalidate();
     }
@@ -577,12 +578,11 @@ class MainWindow : PaintedWindow
         }
         else
         {
-            string[] startItems = { "Off", "On", "On, as administrator" };
-            string startDesc = startMode == Startup.Mode.Off ? "physmouse only runs when you open it."
-                : startMode == Startup.Mode.User ? "Starts in the background when you sign in."
-                : "Starts with administrator rights when you sign in, so the cursor also follows your layout while an elevated app such as Task Manager is in front.";
-            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", startDesc, ComboWidth(g, startItems), startupError);
-            Combo(g, c, startItems, (int)startMode, i => SetStartup((Startup.Mode)i));
+            bool on = startMode == Startup.Mode.User, managed = Policy.DisableAutostart || Policy.ForceAutostart;
+            string startDesc = managed ? "Set by your organization." : on ? "Starts in the background when you sign in." : "physmouse only runs when you open it.";
+            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", startDesc, ToggleWidth(g), startupError);
+            if (managed) Draw(g, on ? "On" : "Off", fBody, t.TextDim, new RectangleF(c.Right - 16 * s - ToggleWidth(g), c.Y, ToggleWidth(g), c.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
+            else Toggle(g, c, on, v => SetStartup(v ? Startup.Mode.User : Startup.Mode.Off));
         }
 
         Group(g, ref y, a, "Controls");
@@ -639,13 +639,6 @@ class MainWindow : PaintedWindow
         startupError = Startup.Set(mode);
         startMode = Startup.Current();
         Invalidate();
-        if (startupError == null && mode == Startup.Mode.Admin && !Startup.Elevated)
-        {
-            var answer = MessageBox.Show(this, "Restart physmouse with administrator rights now? Otherwise this takes effect the next time you sign in.",
-                "physmouse", MessageBoxButtons.YesNo, MessageBoxIcon.None);
-            if (answer == DialogResult.Yes && !Program.RestartElevated())
-                startupError = "Couldn't start the administrator copy now. It will start the next time you sign in.";
-        }
     }
 
     bool storeOn;

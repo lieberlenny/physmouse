@@ -3,19 +3,17 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Security;
 using System.Security.Principal;
-using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using Windows.ApplicationModel;
 using Windows.Foundation;
 
-// Start-at-sign-in and the Start menu entry. The startup state lives in Windows (registry, Task
-// Scheduler), not in settings.ini, so what the app shows is always what Windows will do.
+// Start-at-sign-in and the Start menu entry. The startup state lives in Windows (registry), not in
+// settings.ini, so what the app shows is always what Windows will do.
 static class Startup
 {
-    public enum Mode { Off, User, Admin }
+    public enum Mode { Off, User }
 
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
@@ -31,7 +29,7 @@ static class Startup
 
     public static Mode Current()
     {
-        if (TaskExists()) return Mode.Admin;
+        if (LegacyTaskExists()) return Mode.User; // it still starts physmouse until it's removed
         using (var run = Registry.CurrentUser.OpenSubKey(RunKey))
         using (var ok = Registry.CurrentUser.OpenSubKey(ApprovedKey))
         {
@@ -45,12 +43,11 @@ static class Startup
     public static Mode Policed(Mode mode)
     {
         if (Policy.DisableAutostart) return Mode.Off;
-        if (mode == Mode.Admin && Policy.DisableElevatedStartup) return Mode.User;
         if (mode == Mode.Off && Policy.ForceAutostart) return Mode.User;
         return mode;
     }
 
-    // Brings the startup entry in line with policy. No UAC here: only an elevated copy can remove the elevated task.
+    // Brings the startup entry in line with policy. No UAC here.
     public static void Enforce()
     {
         var now = Current();
@@ -61,19 +58,25 @@ static class Startup
     public static string Set(Mode mode, bool elevate = true)
     {
         if (Policed(mode) != mode) return "Your organization manages this setting.";
-        var was = Current();
-        if (mode == Mode.Admin && was != Mode.Admin)
-        {
-            string err = CreateTask();
-            if (err != null) return err;
-        }
-        if (mode != Mode.Admin && was == Mode.Admin)
-        {
-            string err = Schtasks("/Delete /TN physmouse /F", elevate);
-            if (err != null) return err;
-        }
+        string err = RemoveLegacyTask(elevate);
+        if (err != null) return err;
         SetRunEntry(mode == Mode.User);
         return null;
+    }
+
+    // Up to 1.3.0, "On, as administrator" registered a logon task that ran physmouse.exe with highest
+    // privileges from the per-user install folder. Anything running as the user can replace that exe,
+    // so the task was a way around UAC; it's gone. An elevated copy (the one the task starts at sign-in)
+    // swaps it for a normal startup entry without asking.
+    public static void MigrateLegacyTask()
+    {
+        if (!Elevated || !LegacyTaskExists()) return;
+        if (Schtasks("/Delete /TN physmouse /F", false) == null && Policed(Mode.User) == Mode.User) SetRunEntry(true);
+    }
+
+    static string RemoveLegacyTask(bool elevate)
+    {
+        return LegacyTaskExists() ? Schtasks("/Delete /TN physmouse /F", elevate) : null;
     }
 
     // Windows only runs a Run entry at sign-in when StartupApproved marks it enabled (Task Manager's
@@ -96,47 +99,13 @@ static class Startup
         }
     }
 
-    static bool TaskExists()
+    static bool LegacyTaskExists()
     {
         var p = Process.Start(new ProcessStartInfo("schtasks.exe", "/Query /TN physmouse") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
         p.StandardOutput.ReadToEnd();
         p.WaitForExit();
         return p.ExitCode == 0;
     }
-
-    // A logon task with highest privileges is the supported way to start elevated without a UAC
-    // prompt at every sign-in. Written as XML because schtasks' flags can't lift the default
-    // 72-hour run limit or the below-normal priority, both wrong for something that runs all day.
-    static string CreateTask()
-    {
-        string file = Path.Combine(Path.GetTempPath(), "physmouse-task.xml");
-        File.WriteAllText(file, TaskXml(), Encoding.Unicode);
-        try { return Schtasks("/Create /TN physmouse /XML \"" + file + "\" /F", true); }
-        finally { File.Delete(file); }
-    }
-
-    public static string TaskXml()
-    {
-        string user = SecurityElement.Escape(WindowsIdentity.GetCurrent().Name);
-        return
-"<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" +
-"<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n" +
-"  <RegistrationInfo><Description>Starts physmouse with administrator rights when you sign in.</Description></RegistrationInfo>\r\n" +
-"  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + user + "</UserId></LogonTrigger></Triggers>\r\n" +
-"  <Principals><Principal id=\"Author\"><UserId>" + user + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\r\n" +
-"  <Settings>\r\n" +
-"    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n" +
-"    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n" +
-"    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n" +
-"    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\r\n" +
-"    <Priority>4</Priority>\r\n" +
-"  </Settings>\r\n" +
-"  <Actions Context=\"Author\"><Exec><Command>" + SecurityElement.Escape(Exe) + "</Command><Arguments>--background</Arguments></Exec></Actions>\r\n" +
-"</Task>\r\n";
-    }
-
-    // Starts the elevated task now, so switching to administrator mode doesn't wait for the next sign-in.
-    public static bool RunTask() { return Schtasks("/Run /TN physmouse", false) == null; }
 
     static string Schtasks(string args, bool elevate)
     {

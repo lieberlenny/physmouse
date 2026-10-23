@@ -119,7 +119,7 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.MigrateLegacyTask(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
@@ -286,22 +286,11 @@ static class Program
     public static bool SetHotkey(Keys k) { return ipc.Register(k); }
     public static void SuspendHotkey() { ipc.Register(Keys.None); }
 
-    // Hands over to the elevated scheduled task, which starts a fresh copy with administrator rights.
     // Used by the installer before it replaces or removes the exe.
     public static void AskRunningCopyToExit()
     {
         var other = Native.FindWindowEx(Native.HWND_MESSAGE, IntPtr.Zero, null, IpcTitle);
         if (other != IntPtr.Zero) Native.PostMessage(other, ExitMessage, IntPtr.Zero, IntPtr.Zero);
-    }
-
-    public static bool RestartElevated()
-    {
-        mutex.ReleaseMutex();
-        mutex.Dispose();
-        mutex = null;
-        if (Startup.RunTask()) { tray.Visible = false; Application.Exit(); return true; }
-        TakeMutex();
-        return false;
     }
 
     // Message-only window: receives the "show yourself" request from a second launch and the hotkey.

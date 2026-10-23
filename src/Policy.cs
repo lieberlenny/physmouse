@@ -8,7 +8,6 @@ static class Policy
     const string Key = @"SOFTWARE\Policies\physmouse";
 
     public static readonly bool DisableUpdateCheck = Flag("DisableUpdateCheck");
-    public static readonly bool DisableElevatedStartup = Flag("DisableElevatedStartup");
     public static readonly bool DisableAutostart = Flag("DisableAutostart"); // wins over ForceAutostart
     public static readonly bool ForceAutostart = Flag("ForceAutostart");
     public static readonly bool DisableSelfInstaller = Flag("DisableSelfInstaller");

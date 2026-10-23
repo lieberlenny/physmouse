@@ -27,9 +27,9 @@ Please keep the vulnerability private until the advisory is published. If a fix 
 
 ## Scope
 
-physmouse runs a low-level mouse hook in the signed-in user's session and, if the user chooses "On, as administrator", starts elevated through a Task Scheduler task. Things that are in scope include, for example:
+physmouse runs a low-level mouse hook in the signed-in user's session, without administrator rights. Things that are in scope include, for example:
 
-- anything that lets another process or user get code running through physmouse, especially through the elevated task
+- anything that lets another process or user get code running through physmouse, or get more rights through it
 - input from the mouse hook reaching anything other than the cursor position
 - the update check or installer trusting something they shouldn't
 
