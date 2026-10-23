@@ -202,6 +202,7 @@ class MainWindow : PaintedWindow
         contentScroll = contentHeight = contentMax = 0;
         hotkeyError = startupError = null;
         if (p == Page.General && !Program.Packaged) startMode = Startup.Current();
+        if (p == Page.General && Program.Packaged) ReadStoreStartup();
         Invalidate();
     }
 
@@ -566,10 +567,13 @@ class MainWindow : PaintedWindow
         RectangleF c;
         if (Program.Packaged)
         {
-            // The Store version's startup entry belongs to Windows (the package's startup task).
-            float openW0 = Measure(g, "Open", 0);
-            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", "Windows manages this for the Store version. physmouse starts when you sign in unless you turn it off under Startup apps.", openW0);
-            Button(g, c.Right - 16 * s - openW0, c.Y + (c.Height - 32 * s) / 2, "Open", false, true, () => Process.Start("ms-settings:startupapps"));
+            // The Store version starts through the package's startup task; Windows can lock it (user or policy).
+            bool userOff = storeLocked != null && storeLocked.StartsWith("Turned off");
+            float w = userOff ? Measure(g, "Open", 0) : ToggleWidth(g);
+            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", storeLocked ?? (storeOn ? "Starts in the background when you sign in." : "physmouse only runs when you open it."), w, startupError);
+            if (userOff) Button(g, c.Right - 16 * s - w, c.Y + (c.Height - 32 * s) / 2, "Open", false, true, () => Process.Start("ms-settings:startupapps"));
+            else if (storeLocked != null) Draw(g, storeOn ? "On" : "Off", fBody, t.TextDim, new RectangleF(c.Right - 16 * s - w, c.Y, w, c.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
+            else Toggle(g, c, storeOn, SetStoreStartup);
         }
         else
         {
@@ -599,7 +603,9 @@ class MainWindow : PaintedWindow
         Group(g, ref y, a, "Settings file");
         float openW = Measure(g, "Open folder", 0), resetW = Measure(g, "Reset settings", 0);
         string settingsPath = Settings.DiskPath;
-        c = Card(g, ref y, a, "\uE8B7", settingsPath, "Preferences and monitor layout are kept in AppData, so they survive updates and reinstalling.", openW + resetW + 8 * s);
+        c = Card(g, ref y, a, "\uE8B7", settingsPath, Settings.Portable
+            ? "Portable mode: preferences and monitor layout are kept next to physmouse.exe."
+            : "Preferences and monitor layout are kept in AppData, so they survive updates and reinstalling.", openW + resetW + 8 * s);
         Button(g, c.Right - 16 * s - openW, c.Y + (c.Height - 32 * s) / 2, "Open folder", false, true, () =>
         {
             if (File.Exists(settingsPath)) Process.Start("explorer.exe", "/select,\"" + settingsPath + "\"");
@@ -640,6 +646,24 @@ class MainWindow : PaintedWindow
             if (answer == DialogResult.Yes && !Program.RestartElevated())
                 startupError = "Couldn't start the administrator copy now. It will start the next time you sign in.";
         }
+    }
+
+    bool storeOn;
+    string storeLocked;
+
+    void ReadStoreStartup()
+    {
+        try { storeOn = Startup.Store.Read(out storeLocked); }
+        catch (Exception e) { storeOn = false; storeLocked = "Couldn't read the startup setting: " + e.Message; }
+    }
+
+    void SetStoreStartup(bool on)
+    {
+        startupError = null;
+        try { Startup.Store.Set(on); }
+        catch (Exception e) { startupError = e.Message; }
+        ReadStoreStartup();
+        Invalidate();
     }
 
     void BeginCapture()
@@ -728,7 +752,7 @@ class MainWindow : PaintedWindow
         c = Card(g, ref y, a, "\uEBE8", "Report a problem", "Describe what happened and attach your settings.ini.", Measure(g, "Open", 0));
         Button(g, c.Right - 16 * s - Measure(g, "Open", 0), c.Y + (c.Height - 32 * s) / 2, "Open", false, true, () => Process.Start(Program.RepoUrl + "/issues"));
         Card(g, ref y, a, "\uE8D7", "License", "MIT. Free to use, change and share.", 0);
-        if (Installer.RunningInstalled)
+        if (Installer.RunningInstalled && !Policy.DisableSelfInstaller)
         {
             c = Card(g, ref y, a, "\uE74D", "Uninstall", "Removes physmouse, its shortcuts and its startup entry. You can also do this from Settings > Apps.", Measure(g, "Uninstall", 0));
             Button(g, c.Right - 16 * s - Measure(g, "Uninstall", 0), c.Y + (c.Height - 32 * s) / 2, "Uninstall", false, true,

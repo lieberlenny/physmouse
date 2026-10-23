@@ -3,7 +3,9 @@ rem Builds bin\physmouse.exe with the C# compiler that ships with Windows (.NET 
 rem then runs the tests. No SDK or Visual Studio needed.
 setlocal
 set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
-set REFS=/codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll
+rem The WinRT metadata (Store startup task) ships with Windows 10 and later.
+set WINMD=%WINDIR%\System32\WinMetadata
+set REFS=/codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.dll /r:"%WINMD%\Windows.ApplicationModel.winmd" /r:"%WINMD%\Windows.Foundation.winmd"
 cd /d "%~dp0"
 if not exist bin mkdir bin
 

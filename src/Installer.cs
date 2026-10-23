@@ -55,7 +55,7 @@ static class Installer
     // What to offer when this exe is started by hand.
     public static Offer Check()
     {
-        if (RunningInstalled) return Offer.None;
+        if (RunningInstalled || Policy.DisableSelfInstaller) return Offer.None;
         if (File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini"))) return Offer.None; // portable copy
         var installed = InstalledExe;
         if (installed == null || !File.Exists(installed)) return Offer.Install;
@@ -95,9 +95,10 @@ static class Installer
             if (update) Startup.Reconcile();
             else if (Startup.Current() != Startup.Mode.Admin) // an elevated task already points here and needs no change
             {
-                string err = Startup.Set(startWithWindows ? Startup.Mode.User : Startup.Mode.Off);
+                string err = Startup.Set(Startup.Policed(startWithWindows ? Startup.Mode.User : Startup.Mode.Off));
                 if (err != null) return err;
             }
+            Startup.Enforce();
             return null;
         }
         catch (Exception e)

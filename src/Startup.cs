@@ -8,6 +8,8 @@ using System.Security.Principal;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using Windows.ApplicationModel;
+using Windows.Foundation;
 
 // Start-at-sign-in and the Start menu entry. The startup state lives in Windows (registry, Task
 // Scheduler), not in settings.ini, so what the app shows is always what Windows will do.
@@ -39,9 +41,26 @@ static class Startup
         }
     }
 
+    // The mode the organization's policy allows in place of the wanted one.
+    public static Mode Policed(Mode mode)
+    {
+        if (Policy.DisableAutostart) return Mode.Off;
+        if (mode == Mode.Admin && Policy.DisableElevatedStartup) return Mode.User;
+        if (mode == Mode.Off && Policy.ForceAutostart) return Mode.User;
+        return mode;
+    }
+
+    // Brings the startup entry in line with policy. No UAC here: only an elevated copy can remove the elevated task.
+    public static void Enforce()
+    {
+        var now = Current();
+        if (Policed(now) != now) Set(Policed(now), false);
+    }
+
     // Returns null on success, otherwise a message for the user.
     public static string Set(Mode mode, bool elevate = true)
     {
+        if (Policed(mode) != mode) return "Your organization manages this setting.";
         var was = Current();
         if (mode == Mode.Admin && was != Mode.Admin)
         {
@@ -154,6 +173,43 @@ static class Startup
         var shellType = Type.GetTypeFromProgID("WScript.Shell");
         object shell = Activator.CreateInstance(shellType);
         return shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
+    }
+
+    // The Store version starts through the package's startup task, which the manifest leaves off.
+    // Only called when packaged: the task needs package identity.
+    public static class Store
+    {
+        public static StartupTaskState State() { return Wait(StartupTask.GetAsync(Name)).State; }
+
+        public static StartupTaskState Set(bool on)
+        {
+            var task = Wait(StartupTask.GetAsync(Name));
+            if (!on) { task.Disable(); return task.State; }
+            return Wait(task.RequestEnableAsync()); // stays DisabledByUser if it was turned off in Settings > Apps > Startup
+        }
+
+        // On or off for the settings page; locked says why it can't be changed there (null when it can).
+        public static bool Read(out string locked)
+        {
+            var st = State();
+            locked = st == StartupTaskState.DisabledByUser ? "Turned off under Settings > Apps > Startup. Turn it on there."
+                : st == StartupTaskState.DisabledByPolicy || st == StartupTaskState.EnabledByPolicy || Policy.DisableAutostart || Policy.ForceAutostart ? "Set by your organization."
+                : null;
+            return st == StartupTaskState.Enabled || st == StartupTaskState.EnabledByPolicy;
+        }
+
+        public static void Enforce()
+        {
+            if (Policy.DisableAutostart) Set(false);
+            else if (Policy.ForceAutostart) Set(true);
+        }
+
+        // No System.Runtime.WindowsRuntime (AsTask) without the Windows SDK, so wait by polling.
+        static T Wait<T>(IAsyncOperation<T> op)
+        {
+            while (op.Status == AsyncStatus.Started) { Application.DoEvents(); System.Threading.Thread.Sleep(10); }
+            return op.GetResults();
+        }
     }
 
     // The exe may have moved since the entries were written; point them back at this copy.

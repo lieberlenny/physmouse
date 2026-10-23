@@ -37,25 +37,46 @@ class Settings
         }
     }
 
-    public static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "physmouse", "settings.ini");
+    static readonly string AppDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "physmouse", "settings.ini");
+    static readonly string PortablePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini");
+
+    // Portable mode: a settings.ini next to the exe is used instead of the one in AppData.
+    // A property, because "Run portable" creates that file after startup.
+    public static bool Portable { get { return !Program.Packaged && File.Exists(PortablePath); } }
+    public static string FilePath { get { return Portable ? PortablePath : AppDataPath; } }
 
     public static Settings Load()
     {
-        string legacy = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini");
-        string path = File.Exists(FilePath) ? FilePath : legacy;
-        if (!File.Exists(path)) return new Settings();
-        var s = Parse(File.ReadAllText(path));
+        string path = FilePath;
+        if (!File.Exists(path)) return Defaults();
+        string text = File.ReadAllText(path);
+        // 1.2.0 and 1.2.1 left portable copies with an empty marker file and the real settings in AppData; pick those up.
+        if (path == PortablePath && string.IsNullOrWhiteSpace(text) && File.Exists(AppDataPath)) text = File.ReadAllText(AppDataPath);
+        var s = Parse(text);
         s.Existed = true;
-        if (path != FilePath) s.Save(); // move an old portable settings file into the permanent per-user location
         return s;
+    }
+
+    // A fresh start: the organization's DefaultSettings file if there is one, otherwise built-in defaults.
+    public static Settings Defaults()
+    {
+        try
+        {
+            if (Policy.DefaultSettings != null && File.Exists(Policy.DefaultSettings))
+                return Parse(File.ReadAllText(Policy.DefaultSettings)); // Existed stays false, so first run saves the user's own copy
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return new Settings();
     }
 
     public void Save()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
-        var tmp = FilePath + ".tmp";
+        string path = FilePath;
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        var tmp = path + ".tmp";
         File.WriteAllText(tmp, Format(), new UTF8Encoding(false));
-        if (File.Exists(FilePath)) File.Replace(tmp, FilePath, null); else File.Move(tmp, FilePath);
+        if (File.Exists(path)) File.Replace(tmp, path, null); else File.Move(tmp, path);
         Existed = true;
     }
 

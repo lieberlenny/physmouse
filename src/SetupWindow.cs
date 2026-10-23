@@ -16,7 +16,8 @@ class SetupWindow : PaintedWindow
     bool finished;
     string error;
     string dir = Installer.InstalledExe != null ? Path.GetDirectoryName(Installer.InstalledExe) : Installer.DefaultDir;
-    bool autostart = true, desktop, keepSettings = true;
+    bool autostart = Startup.Policed(Startup.Mode.Off) != Startup.Mode.Off, desktop, keepSettings = true; // off unless policy forces it
+    static readonly bool autostartManaged = Policy.DisableAutostart || Policy.ForceAutostart;
 
     public SetupWindow(Mode mode)
         : base(mode == Mode.Uninstall ? "Uninstall physmouse" : "physmouse setup", 600, 540, 0, 0, false)
@@ -91,8 +92,9 @@ class SetupWindow : PaintedWindow
         {
             var c = Card(g, ref y, a, "\uE8B7", "Location", dir, Measure(g, "Change", 0));
             Button(g, c.Right - 16 * s - Measure(g, "Change", 0), c.Y + (c.Height - 32 * s) / 2, "Change", false, true, ChooseFolder);
-            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", "Runs in the background when you sign in.", ToggleWidth(g));
-            Toggle(g, c, autostart, v => autostart = v);
+            c = Card(g, ref y, a, "\uE7E8", "Start with Windows", autostartManaged ? "Set by your organization." : "Runs in the background when you sign in. You can change this later in physmouse's settings.", ToggleWidth(g));
+            if (autostartManaged) Draw(g, autostart ? "On" : "Off", fBody, t.TextDim, new RectangleF(c.Right - 16 * s - ToggleWidth(g), c.Y, ToggleWidth(g), c.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
+            else Toggle(g, c, autostart, v => autostart = v);
             c = Card(g, ref y, a, "\uE8A7", "Desktop shortcut", "physmouse is always added to the Start menu.", ToggleWidth(g));
             Toggle(g, c, desktop, v => desktop = v);
         }

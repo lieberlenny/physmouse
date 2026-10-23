@@ -13,7 +13,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 set LAYOUT=bin\msix
 if exist %LAYOUT% rmdir /s /q %LAYOUT%
 mkdir %LAYOUT%
-"%CSC%" /nologo /target:exe /main:Icons /out:bin\icons.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll src\*.cs packaging\msix\Icons.cs || exit /b 1
+"%CSC%" /nologo /target:exe /main:Icons /out:bin\icons.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Runtime.dll /r:"%WINDIR%\System32\WinMetadata\Windows.ApplicationModel.winmd" /r:"%WINDIR%\System32\WinMetadata\Windows.Foundation.winmd" src\*.cs packaging\msix\Icons.cs || exit /b 1
 bin\icons.exe %LAYOUT%\Assets || exit /b 1
 copy /y bin\physmouse.exe %LAYOUT%\ >nul
 copy /y packaging\msix\AppxManifest.xml %LAYOUT%\ >nul

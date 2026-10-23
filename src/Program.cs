@@ -83,7 +83,8 @@ static class Program
         {
             var installed = Installer.InstalledExe;
             string dir = installed != null ? Path.GetDirectoryName(installed) : Installer.DefaultDir;
-            if (Installer.Install(dir, !args.Contains("--no-autostart"), false, installed != null) != null) return 1;
+            // Start-at-sign-in is opt-in (--autostart); --no-autostart is still accepted from older setups. Upgrades keep the current state.
+            if (Installer.Install(dir, args.Contains("--autostart"), false, installed != null) != null) return 1;
             if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background"); // an upgrade shouldn't leave it off
             return 0;
         }
@@ -96,6 +97,8 @@ static class Program
         {
             var w = new SetupWindow(offer == Installer.Offer.Install ? SetupWindow.Mode.Install : SetupWindow.Mode.Update);
             Application.Run(w);
+            // An update stopped the running copy; bring it back even if the window was closed without "Open physmouse".
+            if (w.Result == SetupWindow.Outcome.Done && Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background");
             if (w.Result != SetupWindow.Outcome.Portable) return 0; // installed (the installed copy is starting) or cancelled
             // Portable: settings live next to the exe from now on. Settings hasn't been touched yet, so it picks this up.
             File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini"), "");
@@ -116,7 +119,8 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.Reconcile(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+        if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
         Mapper.Start();
@@ -140,7 +144,7 @@ static class Program
         tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) ShowWindow(); };
         tray.BalloonTipClicked += (s, e) => ShowWindow();
         UpdateTray();
-        if (!Packaged) CheckForUpdates();
+        if (!Packaged && !Policy.DisableUpdateCheck) CheckForUpdates();
 
         if (!background) ShowWindow();
         Application.Run();
@@ -231,7 +235,7 @@ static class Program
     public static void ResetSettings()
     {
         SetHotkey(Keys.None);
-        var settings = new Settings();
+        var settings = Settings.Defaults();
         settings.Store(Monitors.Detect());
         Mapper.Cfg = settings;
         Save();
@@ -253,6 +257,8 @@ static class Program
         {
             try
             {
+                // csc builds without a target framework get .NET 4.0's SSL3/TLS 1.0 default, which GitHub refuses
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
                 var request = (HttpWebRequest)WebRequest.Create(LatestReleaseUrl);
                 request.Method = "HEAD";
                 request.UserAgent = "physmouse/" + Version;
