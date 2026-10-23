@@ -102,6 +102,16 @@ class Settings
         return unknown;
     }
 
+    // What a real desk can hold, in mm. NaN, infinity or 1e308 from a hand-edited file would break the
+    // cursor maths and hang the editor's drawing.
+    public const double MaxPosition = 100000, MinSize = 20, MaxSize = 20000;
+
+    public static bool Plausible(double x, double y, double w, double h)
+    {
+        return Math.Abs(x) <= MaxPosition && Math.Abs(y) <= MaxPosition // also false for NaN
+            && w >= MinSize && w <= MaxSize && h >= MinSize && h <= MaxSize;
+    }
+
     static string Product(string id) { int i = id.IndexOf('\\'); return i < 0 ? id : id.Substring(0, i); }
 
     // Screens that aren't connected right now keep their saved place.
@@ -175,7 +185,7 @@ class Settings
             {
                 var t = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
                 double[] v = new double[4];
-                if (t.Length >= 5 && Enumerable.Range(0, 4).All(i => double.TryParse(t[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out v[i])) && v[2] > 0 && v[3] > 0)
+                if (t.Length >= 5 && Enumerable.Range(0, 4).All(i => double.TryParse(t[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out v[i])) && Plausible(v[0], v[1], v[2], v[3]))
                 {
                     s.Layout[t[0]] = v;
                     if (hash >= 0) s.notes[t[0]] = raw.Substring(hash + 1).Trim();
@@ -235,7 +245,7 @@ class Settings
             else if (p == "alt") k |= Keys.Alt;
             else if (p == "shift") k |= Keys.Shift;
             else if (p.Length == 1 && char.IsDigit(p[0])) k |= Keys.D0 + (p[0] - '0');
-            else if (Enum.TryParse(p, true, out code) && (code & Keys.Modifiers) == 0) k |= code;
+            else if (Enum.TryParse(p, true, out code) && (code & Keys.Modifiers) == 0 && code >= Keys.Back) k |= code; // below Back are mouse buttons
             else return Keys.None;
         }
         return (k & Keys.KeyCode) == Keys.None ? Keys.None : k;
