@@ -67,6 +67,8 @@ static class Program
         // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success,
         // 2 that the elevated task from 1.3.0 or older is still registered and needs an administrator to remove it.
         bool quiet = args.Contains("--quiet");
+        // Only deletes the elevated task from 1.3.0 or older; meant for an administrator or SYSTEM. 0 = gone, 1 = still there.
+        if (args.Contains("--remove-legacy-task")) return Startup.RemoveLegacyTaskOnly() ? 0 : 1;
         if (args.Contains("--uninstall") && !Packaged)
         {
             if (quiet)

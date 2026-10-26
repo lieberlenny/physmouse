@@ -88,6 +88,12 @@ static class Startup
         else if (Policed(Mode.User) == Mode.User) SetRunEntry(true);
     }
 
+    // For --remove-legacy-task: deletes the task and nothing else, so an administrator or SYSTEM can run it.
+    public static bool RemoveLegacyTaskOnly()
+    {
+        return RemoveLegacyTask(false) == null;
+    }
+
     static string RemoveLegacyTask(bool elevate)
     {
         return LegacyTaskExists() ? Schtasks("/Delete /TN physmouse /F", elevate) : null;
