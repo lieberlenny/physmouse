@@ -29,8 +29,12 @@ jobs:
       - name: Check the version and prepare the release
         id: prep
         shell: pwsh
+        # Tag names reach the script through env:, never ${{ }}, so they can't inject code.
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          $version = $env:TAG.TrimStart('v')
           $built = (Get-Item bin\physmouse.exe).VersionInfo.FileVersion
           if ($built -ne "$version.0") { throw "Tag $version doesn't match AssemblyFileVersion $built in src/Program.cs" }
           $asset = "physmouse-v$version-installer.exe"
@@ -51,7 +55,7 @@ jobs:
           **SHA-256** of ``$asset``: ``$hash``
 
           This file was built from this tag by GitHub Actions. To check it, run:
-          ``gh attestation verify $asset -R ${{ github.repository }}``
+          ``gh attestation verify $asset -R $env:REPO``
 
           The exe is unsigned, so Windows SmartScreen or antivirus software may warn about it.
           "@
@@ -69,7 +73,10 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          ASSET: ${{ steps.prep.outputs.asset }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
-          $provenance = "${{ steps.prep.outputs.asset }}.intoto.jsonl"
-          Copy-Item "${{ steps.attest.outputs.bundle-path }}" $provenance
-          gh release create "${{ github.ref_name }}" "${{ steps.prep.outputs.asset }}" $provenance --title "Release ${{ github.ref_name }}" --notes-file notes.md --verify-tag
+          $provenance = "$env:ASSET.intoto.jsonl"
+          Copy-Item $env:BUNDLE $provenance
+          gh release create $env:TAG $env:ASSET $provenance --title "Release $env:TAG" --notes-file notes.md --verify-tag

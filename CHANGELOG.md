@@ -2,6 +2,16 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
+## Unreleased
+
+### Security
+- `schtasks.exe` and `cmd.exe` are started by their full path in System32, not looked up in the app's own folder first.
+- The release workflow passes the tag name to its scripts through environment variables instead of inserting it into the script text.
+
+### Docs
+- README: how to remove the elevated task left over from 1.3.0 (`schtasks /Delete /TN physmouse /F` as administrator), which blocks a silent uninstall until it's gone.
+- README: fixed the policy table, clarified what `ForceAutostart` locks, that policy values are read at startup and which value types count as on, and that a UNC path in `DefaultSettings` is read over the network.
+
 ## 1.3.1 (2026-10-23)
 
 ### Security

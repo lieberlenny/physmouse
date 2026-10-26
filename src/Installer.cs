@@ -136,7 +136,7 @@ static class Installer
     {
         if (pendingDir == null) return;
         string exe = Path.Combine(pendingDir, "physmouse.exe");
-        Process.Start(new ProcessStartInfo("cmd.exe",
+        Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"),
             "/c ping -n 3 127.0.0.1 >nul & del /f /q \"" + exe + "\" & rmdir \"" + pendingDir + "\"")
         { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = Path.GetTempPath() });
     }

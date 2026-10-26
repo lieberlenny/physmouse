@@ -101,7 +101,7 @@ static class Startup
 
     static bool LegacyTaskExists()
     {
-        var p = Process.Start(new ProcessStartInfo("schtasks.exe", "/Query /TN physmouse") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
+        var p = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN physmouse") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
         p.StandardOutput.ReadToEnd();
         p.WaitForExit();
         return p.ExitCode == 0;
@@ -109,7 +109,7 @@ static class Startup
 
     static string Schtasks(string args, bool elevate)
     {
-        var psi = new ProcessStartInfo("schtasks.exe", args) { WindowStyle = ProcessWindowStyle.Hidden };
+        var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), args) { WindowStyle = ProcessWindowStyle.Hidden };
         if (elevate && !Elevated) { psi.Verb = "runas"; psi.UseShellExecute = true; }
         else { psi.UseShellExecute = false; psi.CreateNoWindow = true; }
         try

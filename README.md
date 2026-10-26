@@ -79,6 +79,7 @@ This section is for anyone reviewing physmouse before rolling it out, for exampl
 
 - GitHub version: one HTTPS `HEAD` request to `github.com/lieberlenny/physmouse/releases/latest` at startup, to see whether a newer release exists. It sends nothing except the app version in the User-Agent. The `DisableUpdateCheck` policy turns it off.
 - Microsoft Store version: no network requests at all. The Store handles updates.
+- Both versions: if the `DefaultSettings` policy points to a network share (UNC path), Windows reads that file over SMB on the first start.
 
 ### What is written where
 
@@ -104,7 +105,7 @@ physmouse installs per user, so deploy it in the **user** context (Intune Win32 
 
 - A silent install creates the Start menu shortcut and nothing else. It doesn't start physmouse. Start with Windows stays off unless you pass `--autostart` or set the `ForceAutostart` policy.
 - An upgrade keeps the install folder, the settings and the current startup choice. If physmouse was running, it is restarted.
-- A silent uninstall never shows a UAC prompt. It fails (exit code 1) only if an elevated task from version 1.3.0 or older is still registered, because a standard user can't remove that task.
+- A silent uninstall never shows a UAC prompt. It fails (exit code 1) only if an elevated task from version 1.3.0 or older is still registered, because a standard user can't remove that task. Upgrading doesn't remove it either: physmouse only replaces it when the task itself starts physmouse at the next sign-in. To clean it up right away, run `schtasks /Delete /TN physmouse /F` as administrator (for example as an Intune script in the system context) before the upgrade or uninstall.
 - **Detection rule:** registry `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\physmouse`, value `DisplayVersion`, string comparison *equals* the deployed version (for example `1.2.1`). Alternatively, the file `%LOCALAPPDATA%\Programs\physmouse\physmouse.exe` with a file version of at least that version.
 
 ### Admin policy
@@ -115,13 +116,13 @@ Values under `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\physmouse` override what the 
 |---|---|---|
 | `DisableUpdateCheck` | DWORD `1` | No update check against GitHub. |
 | `DisableAutostart` | DWORD `1` | Start with Windows is off and can't be turned on. Wins over `ForceAutostart`. |
-| `ForceAutostart` | DWORD `1` | Start with Windows is on and can't be turned off. |
-
-`DisableElevatedStartup` from 1.3.0 is no longer needed, because the elevated startup option is gone; it's ignored.
+| `ForceAutostart` | DWORD `1` | Start with Windows is on and the toggle is locked. Users can still disable the entry in Task Manager; physmouse turns it back on the next time it starts. |
 | `DisableSelfInstaller` | DWORD `1` | The downloaded exe no longer offers to install or update itself, and About no longer shows **Uninstall**. The command-line switches above keep working. |
 | `DefaultSettings` | String | Path to a `settings.ini` (environment variables allowed) that is used as the starting point for users who have no settings yet, for example a preset layout or options. Prefer a local path: if a network share can't be reached, the first start waits for Windows' network timeout (about 20 seconds). |
 
 In the Store version, `DisableAutostart` and `ForceAutostart` turn the package's startup task off or on. Windows' own app policies still apply.
+
+A flag is on when it is a `REG_DWORD` other than 0 or a string `1`; any other type or value counts as off. Changes take effect the next time physmouse starts. `DisableElevatedStartup` from 1.3.0 is no longer needed, because the elevated startup option is gone; it's ignored.
 
 ## Building
 
