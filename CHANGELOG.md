@@ -5,11 +5,11 @@ Each version has a git tag `v<version>`. The Microsoft Store package of a versio
 ## Unreleased
 
 ### Security
+- The fix in 1.3.1 for the "On, as administrator" task was incomplete: an upgrade without administrator rights (winget, Intune, `--install --quiet`) left the task in place until it next fired, and anything running as the user could swap the exe it starts in the meantime. physmouse now offers to remove the task (with a UAC prompt) whenever it's started by hand or set up interactively, and `--install --quiet` / `--uninstall --quiet` return exit code 2 while the task exists, so admins can find and remove it. Affects administrators who turned on "On, as administrator" in 1.3.0 or older. (GHSA-pvgf-f87w-4jfp)
 - `schtasks.exe` and `cmd.exe` are started by their full path in System32, not looked up in the app's own folder first.
 - The release workflow passes the tag name to its scripts through environment variables instead of inserting it into the script text.
 
 ### Docs
-- README: how to remove the elevated task left over from 1.3.0 (`schtasks /Delete /TN physmouse /F` as administrator), which blocks a silent uninstall until it's gone.
 - README: fixed the policy table, clarified what `ForceAutostart` locks, that policy values are read at startup and which value types count as on, and that a UNC path in `DefaultSettings` is read over the network.
 
 ## 1.3.1 (2026-10-23)
