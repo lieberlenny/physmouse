@@ -136,6 +136,10 @@ The build uses the C# compiler that ships with Windows (`%WINDIR%\Microsoft.NET\
 
 physmouse has no account, ads or telemetry, and settings stay on your PC. The only network request is the update check against GitHub at startup (not in the Store version, and admins can turn it off). Full policy: https://lennartblees.de/physmouse-privacy.html
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org). See the [code signing policy](CODE_SIGNING_POLICY.md).
+
 ## License
 
 [MIT](LICENSE)

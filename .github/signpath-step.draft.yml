@@ -1,0 +1,27 @@
+# DRAFT, not a workflow (it has no `on:` trigger, so GitHub ignores it).
+# Apply after SignPath approves the project: splice these steps into release.yml between "Check the version and
+# prepare the release" and "actions/attest", add `actions: read` to the job permissions, then fill in the <...> values
+# from SignPath, pin both actions by commit like the others, and drop the "unsigned" lines from the release notes
+# and the README disclaimer. The attestation must then cover the signed file.
+# The SHA-256 in the notes is computed in the prep step, so move signing before it (or hash again after signing).
+      - uses: actions/upload-artifact@v4   # ponytail: pin by SHA
+        id: unsigned
+        with:
+          name: unsigned
+          path: ${{ steps.prep.outputs.asset }}
+
+      - uses: signpath/github-action-submit-signing-request@v1   # ponytail: pin by SHA
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: '<org id>'
+          project-slug: physmouse
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Use the signed exe
+        shell: pwsh
+        env:
+          ASSET: ${{ steps.prep.outputs.asset }}
+        run: Copy-Item "signed\$env:ASSET" $env:ASSET -Force
