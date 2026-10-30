@@ -99,13 +99,14 @@ physmouse installs per user, so deploy it in the **user** context (Intune Win32 
 
 | Action | Command | Exit code |
 |---|---|---|
-| Install or upgrade | `physmouse.exe --install --quiet` | 0 = success, 1 = failure |
+| Install or upgrade | `physmouse.exe --install --quiet` | 0 = success, 1 = failure, 2 = installed, but the elevated task from 1.3.0 or older is still registered (see below) |
 | Same, and start with Windows | `physmouse.exe --install --quiet --autostart` | 0 / 1 |
-| Uninstall (keeps `settings.ini`) | `"%LOCALAPPDATA%\Programs\physmouse\physmouse.exe" --uninstall --quiet` (also registered as `QuietUninstallString`) | 0 / 1 |
+| Remove the elevated task from 1.3.0 or older (run as administrator or SYSTEM) | `physmouse.exe --remove-legacy-task` | 0 = removed or not there, 1 = failure |
+| Uninstall (keeps `settings.ini`) | `"%LOCALAPPDATA%\Programs\physmouse\physmouse.exe" --uninstall --quiet` (also registered as `QuietUninstallString`) | 0 / 1 / 2 = nothing removed, because that task is still registered |
 
 - A silent install creates the Start menu shortcut and nothing else. It doesn't start physmouse. Start with Windows stays off unless you pass `--autostart` or set the `ForceAutostart` policy.
 - An upgrade keeps the install folder, the settings and the current startup choice. If physmouse was running, it is restarted.
-- A silent uninstall never shows a UAC prompt. It fails (exit code 1) only if an elevated task from version 1.3.0 or older is still registered, because a standard user can't remove that task. Upgrading doesn't remove it either: physmouse only replaces it when the task itself starts physmouse at the next sign-in. To clean it up right away, run `schtasks /Delete /TN physmouse /F` as administrator (for example as an Intune script in the system context) before the upgrade or uninstall.
+- A silent install or uninstall never shows a UAC prompt, so it can't remove the elevated task that "On, as administrator" registered in version 1.3.0 or older. While that task exists, both return exit code 2 and the uninstall removes nothing. Remove the task as administrator or SYSTEM, for example with an Intune script in the system context, then run the uninstall again: `schtasks /Delete /TN physmouse /F`, or `physmouse.exe --remove-legacy-task` from your deployment package. Don't run the copy in the user's `%LOCALAPPDATA%` folder as SYSTEM: the user can replace that file. When someone starts physmouse by hand, it offers to remove the task itself (with a UAC prompt).
 - **Detection rule:** registry `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\physmouse`, value `DisplayVersion`, string comparison *equals* the deployed version (for example `1.2.1`). Alternatively, the file `%LOCALAPPDATA%\Programs\physmouse\physmouse.exe` with a file version of at least that version.
 
 ### Admin policy

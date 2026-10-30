@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Moves the cursor between screens by where they physically sit on your desk.")]
 [assembly: AssemblyProduct("physmouse")]
 [assembly: AssemblyCopyright("Copyright © 2026 Lennart Blees")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]
 
 static class Program
 {
@@ -64,15 +64,18 @@ static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Native.AllowDarkMenus();
 
-        // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success.
+        // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success,
+        // 2 that the elevated task from 1.3.0 or older is still registered and needs an administrator to remove it.
         bool quiet = args.Contains("--quiet");
+        // Only deletes the elevated task from 1.3.0 or older; meant for an administrator or SYSTEM. 0 = gone, 1 = still there.
+        if (args.Contains("--remove-legacy-task")) return Startup.RemoveLegacyTaskOnly() ? 0 : 1;
         if (args.Contains("--uninstall") && !Packaged)
         {
             if (quiet)
             {
                 bool ok = Installer.Uninstall(true, true) == null; // keeps settings: a silent uninstall shouldn't lose a layout
                 if (ok) Installer.RemoveFiles();
-                return ok ? 0 : 1;
+                return ok ? 0 : Startup.LegacyTaskExists() ? 2 : 1; // the exe stays: a task pointing at a missing exe in a user folder is worse
             }
             var w = new SetupWindow(SetupWindow.Mode.Uninstall);
             Application.Run(w);
@@ -86,7 +89,7 @@ static class Program
             // Start-at-sign-in is opt-in (--autostart); --no-autostart is still accepted from older setups. Upgrades keep the current state.
             if (Installer.Install(dir, args.Contains("--autostart"), false, installed != null) != null) return 1;
             if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background"); // an upgrade shouldn't leave it off
-            return 0;
+            return Startup.LegacyTaskExists() ? 2 : 0;
         }
 
         // Started by hand from a download: offer to install (or update) before anything else.
@@ -98,6 +101,7 @@ static class Program
             var w = new SetupWindow(offer == Installer.Offer.Install ? SetupWindow.Mode.Install : SetupWindow.Mode.Update);
             Application.Run(w);
             // An update stopped the running copy; bring it back even if the window was closed without "Open physmouse".
+            if (w.Result == SetupWindow.Outcome.Done) Startup.OfferLegacyTaskRemoval();
             if (w.Result == SetupWindow.Outcome.Done && Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background");
             if (w.Result != SetupWindow.Outcome.Portable) return 0; // installed (the installed copy is starting) or cancelled
             // Portable: settings live next to the exe from now on. Settings hasn't been touched yet, so it picks this up.
@@ -119,7 +123,7 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.MigrateLegacyTask(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.MigrateLegacyTask(); if (!background) Startup.OfferLegacyTaskRemoval(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }

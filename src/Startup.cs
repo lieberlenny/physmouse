@@ -74,6 +74,26 @@ static class Startup
         if (Schtasks("/Delete /TN physmouse /F", false) == null && Policed(Mode.User) == Mode.User) SetRunEntry(true);
     }
 
+    // A non-elevated copy can't remove the task, and waiting for it to fire leaves a window in which
+    // the exe it starts can be swapped. So whenever someone starts physmouse by hand, ask for UAC once.
+    public static void OfferLegacyTaskRemoval()
+    {
+        if (Elevated || !LegacyTaskExists()) return;
+        if (MessageBox.Show("An older version of physmouse registered a task that starts it with administrator rights at sign-in. "
+            + "It's no longer used, and other programs could misuse it to get administrator rights without asking.\n\n"
+            + "Remove it now? Windows will ask for administrator permission. Start with Windows stays on.",
+            "physmouse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        string err = Schtasks("/Delete /TN physmouse /F", true);
+        if (err != null) MessageBox.Show("The task is still there. " + err, "physmouse", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        else if (Policed(Mode.User) == Mode.User) SetRunEntry(true);
+    }
+
+    // For --remove-legacy-task: deletes the task and nothing else, so an administrator or SYSTEM can run it.
+    public static bool RemoveLegacyTaskOnly()
+    {
+        return RemoveLegacyTask(false) == null;
+    }
+
     static string RemoveLegacyTask(bool elevate)
     {
         return LegacyTaskExists() ? Schtasks("/Delete /TN physmouse /F", elevate) : null;
@@ -99,7 +119,7 @@ static class Startup
         }
     }
 
-    static bool LegacyTaskExists()
+    public static bool LegacyTaskExists()
     {
         var p = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN physmouse") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
         p.StandardOutput.ReadToEnd();
