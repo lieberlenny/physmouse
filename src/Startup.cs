@@ -67,8 +67,7 @@ static class Startup
 
     // Up to 1.3.0, "On, as administrator" registered a logon task that ran physmouse.exe with highest
     // privileges from the per-user install folder. Anything running as the user can replace that exe,
-    // so the task was a way around UAC; it's gone. An elevated copy (the one the task starts at sign-in)
-    // swaps it for a normal startup entry without asking.
+    // so the task was a way around UAC; manual starts now ask to remove it and restore a normal entry.
     public static void MigrateLegacyTask()
     {
         if (!LegacyTaskExists()) return;
