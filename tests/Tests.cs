@@ -61,6 +61,9 @@ static class Tests
         Check(Settings.Parse("[layout]\nA  NaN 0 500 300\nB  0 Infinity 500 300\nC  1e308 0 500 300\nD  0 0 1e-300 300\nE  0 0 500 1e9\nF  -97 -385 797 334").Layout.Keys.Count == 1,
             "implausible layout values (NaN, infinity, huge, tiny) are dropped");
         Check(Settings.ParseHotkey("ctrl+alt+lbutton") == Keys.None, "mouse buttons are not shortcut keys");
+        Check(Installer.SameSession(3, 3) && !Installer.SameSession(3, 4), "installer only targets physmouse processes in this session");
+        Check(Startup.IsLegacyTask("<Task><Actions><Exec><Command>C:\\Program Files\\physmouse\\physmouse.exe</Command></Exec></Actions></Task>", "C:\\Program Files\\physmouse\\physmouse.exe"), "legacy task is recognized by its executable path");
+        Check(!Startup.IsLegacyTask("<Task><Actions><Exec><Command>C:\\Other\\physmouse.exe</Command></Exec></Actions></Task>", "C:\\Program Files\\physmouse\\physmouse.exe"), "unrelated task with the same name is preserved");
 
         // a screen whose connection id changed still finds its saved place by EDID product code
         var moved = new List<Mon> { new Mon { Id = @"LEN68F6\7&abc&0&UID999", X = 1, Y = 1, W = 1, H = 1 } };

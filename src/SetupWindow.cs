@@ -133,7 +133,11 @@ class SetupWindow : PaintedWindow
     {
         if (finished)
         {
-            if (mode != Mode.Uninstall && Installer.InstalledExe != null) Process.Start(Installer.InstalledExe);
+            if (mode != Mode.Uninstall && Installer.InstalledExe != null)
+            {
+                if (mode == Mode.Update && Installer.StoppedRunningCopy) Installer.StoppedRunningCopy = false;
+                Process.Start(Installer.InstalledExe);
+            }
             Close();
             return;
         }

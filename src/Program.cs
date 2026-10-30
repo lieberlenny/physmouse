@@ -64,15 +64,15 @@ static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Native.AllowDarkMenus();
 
-        // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success,
-        // 2 that the elevated task from 1.3.0 or older is still registered and needs an administrator to remove it.
+        // --quiet runs setup without any window, for package managers such as winget. Exit code 2 means the legacy task remains.
         bool quiet = args.Contains("--quiet");
-        // Only deletes the elevated task from 1.3.0 or older; meant for an administrator or SYSTEM. 0 = gone, 1 = still there.
-        if (args.Contains("--remove-legacy-task")) return Startup.RemoveLegacyTaskOnly() ? 0 : 1;
+        if (args.Contains("--remove-legacy-task") && !Packaged)
+            return Startup.RemoveLegacyTask(false, true) == null ? 0 : 1;
         if (args.Contains("--uninstall") && !Packaged)
         {
             if (quiet)
             {
+                if (Startup.LegacyTaskExists()) return 2;
                 bool ok = Installer.Uninstall(true, true) == null; // keeps settings: a silent uninstall shouldn't lose a layout
                 if (ok) Installer.RemoveFiles();
                 return ok ? 0 : Startup.LegacyTaskExists() ? 2 : 1; // the exe stays: a task pointing at a missing exe in a user folder is worse
@@ -87,7 +87,7 @@ static class Program
             var installed = Installer.InstalledExe;
             string dir = installed != null ? Path.GetDirectoryName(installed) : Installer.DefaultDir;
             // Start-at-sign-in is opt-in (--autostart); --no-autostart is still accepted from older setups. Upgrades keep the current state.
-            if (Installer.Install(dir, args.Contains("--autostart"), false, installed != null) != null) return 1;
+            if (Installer.Install(dir, args.Contains("--autostart"), false, installed != null, true) != null) return 1;
             if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background"); // an upgrade shouldn't leave it off
             return Startup.LegacyTaskExists() ? 2 : 0;
         }
@@ -100,9 +100,8 @@ static class Program
         {
             var w = new SetupWindow(offer == Installer.Offer.Install ? SetupWindow.Mode.Install : SetupWindow.Mode.Update);
             Application.Run(w);
-            // An update stopped the running copy; bring it back even if the window was closed without "Open physmouse".
-            if (w.Result == SetupWindow.Outcome.Done) Startup.OfferLegacyTaskRemoval();
-            if (w.Result == SetupWindow.Outcome.Done && Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background");
+            // Restart after a cancelled update; a successful "Open physmouse" clears the flag.
+            if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background");
             if (w.Result != SetupWindow.Outcome.Portable) return 0; // installed (the installed copy is starting) or cancelled
             // Portable: settings live next to the exe from now on. Settings hasn't been touched yet, so it picks this up.
             File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini"), "");
@@ -123,7 +122,7 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.MigrateLegacyTask(); if (!background) Startup.OfferLegacyTaskRemoval(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.MigrateLegacyTask(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
