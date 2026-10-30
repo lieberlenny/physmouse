@@ -100,8 +100,8 @@ static class Program
         {
             var w = new SetupWindow(offer == Installer.Offer.Install ? SetupWindow.Mode.Install : SetupWindow.Mode.Update);
             Application.Run(w);
-            // An update stopped the running copy; bring it back even if the window was closed without "Open physmouse".
-            if (w.Result == SetupWindow.Outcome.Done && Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background");
+            // Restart after a cancelled update; a successful "Open physmouse" clears the flag.
+            if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background");
             if (w.Result != SetupWindow.Outcome.Portable) return 0; // installed (the installed copy is starting) or cancelled
             // Portable: settings live next to the exe from now on. Settings hasn't been touched yet, so it picks this up.
             File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.ini"), "");
