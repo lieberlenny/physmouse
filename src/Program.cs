@@ -122,7 +122,7 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.MigrateLegacyTask(); if (!background) Startup.OfferLegacyTaskRemoval(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.MigrateLegacyTask(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
