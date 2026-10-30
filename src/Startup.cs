@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Security.Principal;
+using System.Xml;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using Windows.ApplicationModel;
@@ -70,13 +71,35 @@ static class Startup
     // swaps it for a normal startup entry without asking.
     public static void MigrateLegacyTask()
     {
-        if (!Elevated || !LegacyTaskExists()) return;
-        if (Schtasks("/Delete /TN physmouse /F", false) == null && Policed(Mode.User) == Mode.User) SetRunEntry(true);
+        if (!LegacyTaskExists()) return;
+        if (Schtasks("/Delete /TN physmouse /F", !Elevated) == null && Policed(Mode.User) == Mode.User) SetRunEntry(true);
     }
 
-    static string RemoveLegacyTask(bool elevate)
+    public static bool LegacyTaskExists()
     {
-        return LegacyTaskExists() ? Schtasks("/Delete /TN physmouse /F", elevate) : null;
+        var p = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN physmouse /XML") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
+        string xml = p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        if (p.ExitCode != 0) return false;
+        string expected = Installer.InstalledExe ?? Path.Combine(Installer.DefaultDir, "physmouse.exe");
+        return IsLegacyTask(xml, expected) || IsLegacyTask(xml, Application.ExecutablePath);
+    }
+
+    public static bool IsLegacyTask(string xml, string expectedExe)
+    {
+        try
+        {
+            var doc = new XmlDocument();
+            doc.LoadXml(xml);
+            var command = doc.SelectSingleNode("//*[local-name()='Command']");
+            return command != null && string.Equals(Path.GetFullPath(Environment.ExpandEnvironmentVariables(command.InnerText.Trim().Trim('"'))), Path.GetFullPath(expectedExe), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception) { return false; }
+    }
+
+    public static string RemoveLegacyTask(bool elevate, bool force = false)
+    {
+        return force || LegacyTaskExists() ? Schtasks("/Delete /TN physmouse /F", elevate) : null;
     }
 
     // Windows only runs a Run entry at sign-in when StartupApproved marks it enabled (Task Manager's
@@ -97,14 +120,6 @@ static class Startup
                 ok.DeleteValue(Name, false);
             }
         }
-    }
-
-    static bool LegacyTaskExists()
-    {
-        var p = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN physmouse") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
-        p.StandardOutput.ReadToEnd();
-        p.WaitForExit();
-        return p.ExitCode == 0;
     }
 
     static string Schtasks(string args, bool elevate)
