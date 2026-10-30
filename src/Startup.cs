@@ -121,6 +121,7 @@ static class Startup
         }
     }
 
+
     static string Schtasks(string args, bool elevate)
     {
         var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), args) { WindowStyle = ProcessWindowStyle.Hidden };

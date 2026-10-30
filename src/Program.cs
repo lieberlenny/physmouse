@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("Moves the cursor between screens by where they physically sit on your desk.")]
 [assembly: AssemblyProduct("physmouse")]
 [assembly: AssemblyCopyright("Copyright © 2026 Lennart Blees")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]
 
 static class Program
 {
@@ -75,7 +75,7 @@ static class Program
                 if (Startup.LegacyTaskExists()) return 2;
                 bool ok = Installer.Uninstall(true, true) == null; // keeps settings: a silent uninstall shouldn't lose a layout
                 if (ok) Installer.RemoveFiles();
-                return ok ? 0 : 1;
+                return ok ? 0 : Startup.LegacyTaskExists() ? 2 : 1; // the exe stays: a task pointing at a missing exe in a user folder is worse
             }
             var w = new SetupWindow(SetupWindow.Mode.Uninstall);
             Application.Run(w);
@@ -122,7 +122,7 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.MigrateLegacyTask(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.MigrateLegacyTask(); if (!background) Startup.OfferLegacyTaskRemoval(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }

@@ -99,14 +99,15 @@ physmouse installs per user, so deploy it in the **user** context (Intune Win32 
 
 | Action | Command | Exit code |
 |---|---|---|
-| Install or upgrade | `physmouse.exe --install --quiet` | 0 = success, 1 = failure, 2 = installed but the old elevated startup task remains |
+| Install or upgrade | `physmouse.exe --install --quiet` | 0 = success, 1 = failure, 2 = installed but the legacy elevated task from 1.3.0 or older remains |
 | Same, and start with Windows | `physmouse.exe --install --quiet --autostart` | 0 / 1 / 2 |
-| Uninstall (keeps `settings.ini`) | `"%LOCALAPPDATA%\Programs\physmouse\physmouse.exe" --uninstall --quiet` (also registered as `QuietUninstallString`) | 0 = success, 1 = failure, 2 = no changes because the old elevated startup task remains |
+| Remove the legacy elevated task (run as administrator or SYSTEM) | `physmouse.exe --remove-legacy-task` | 0 = removed or not there, 1 = failure |
+| Uninstall (keeps `settings.ini`) | `"%LOCALAPPDATA%\Programs\physmouse\physmouse.exe" --uninstall --quiet` (also registered as `QuietUninstallString`) | 0 = success, 1 = failure, 2 = no changes because the legacy task remains |
 
 - A silent install creates the Start menu shortcut and nothing else. It doesn't start physmouse. Start with Windows stays off unless you pass `--autostart` or set the `ForceAutostart` policy.
 - An upgrade keeps the install folder, the settings and the current startup choice. If physmouse was running, it is restarted.
-- Exit code 2 means the legacy elevated task could not be removed without UAC. For a silent install the app is installed, but the task still needs cleanup; for a silent uninstall nothing was changed. Map 2 as an expected result in Intune or WinGet if you want deployment reported as successful, or remove the task first with `physmouse.exe --remove-legacy-task` running as SYSTEM. That SYSTEM command only deletes the task; it cannot restore the signed-in user's startup entry. A user can instead start physmouse manually and approve the UAC prompt to remove the task and restore normal start-with-Windows behavior.
-- **Detection rule:** registry `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\physmouse`, value `DisplayVersion`, string comparison *equals* the deployed version (for example `1.3.1`). Alternatively, the file `%LOCALAPPDATA%\Programs\physmouse\physmouse.exe` with a file version of at least that version.
+- Exit code 2 means the legacy elevated task could not be removed without UAC. A quiet install completes but needs task cleanup; a quiet uninstall makes no changes. Map 2 as an expected result in Intune or WinGet, since unmapped non-zero exit codes are treated as failures. Remove the task as administrator or SYSTEM with `schtasks /Delete /TN physmouse /F`, or run `physmouse.exe --remove-legacy-task` from a trusted deployment package. Do not run the copy from the user's `%LOCALAPPDATA%` folder as SYSTEM because the user can replace it. The SYSTEM command only deletes the task; it cannot restore the signed-in user's startup entry. A user can start physmouse manually and approve the UAC prompt to remove the task and restore normal start-with-Windows.
+- **Detection rule:** registry `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\physmouse`, value `DisplayVersion`, string comparison *equals* the deployed version (for example `1.3.2`). Alternatively, the file `%LOCALAPPDATA%\Programs\physmouse\physmouse.exe` with a file version of at least that version.
 
 ### Admin policy
 
