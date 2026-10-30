@@ -64,8 +64,11 @@ static class Installer
     }
 
     // Copies this exe into dir and registers it. Returns null on success, otherwise a message for the user.
-    public static string Install(string dir, bool startWithWindows, bool desktopShortcut, bool update)
+    public static string Install(string dir, bool startWithWindows, bool desktopShortcut, bool update, bool quiet = false)
     {
+        var startup = update ? Startup.Current() : Startup.Policed(startWithWindows ? Startup.Mode.User : Startup.Mode.Off);
+        string taskError = Startup.RemoveLegacyTask(!quiet);
+        if (taskError != null && !(quiet && Startup.LegacyTaskExists())) return taskError;
         if (!StopRunning()) return "physmouse is still running. Quit it from its icon next to the clock, then try again.";
         string exe = Path.Combine(dir, "physmouse.exe");
         try
@@ -92,10 +95,9 @@ static class Installer
             Startup.Exe = exe;
             Startup.CreateShortcut(Startup.StartMenuShortcut);
             if (desktopShortcut) Startup.CreateShortcut(Startup.DesktopShortcut);
-            if (update) Startup.Reconcile();
-            else
+            if (!Startup.LegacyTaskExists())
             {
-                string err = Startup.Set(Startup.Policed(startWithWindows ? Startup.Mode.User : Startup.Mode.Off));
+                string err = Startup.Set(startup, false);
                 if (err != null) return err;
             }
             Startup.Enforce();
@@ -111,9 +113,10 @@ static class Installer
     // RemoveFiles deletes that once this process has exited.
     public static string Uninstall(bool keepSettings, bool quiet = false)
     {
-        if (!StopRunning()) return "physmouse is still running. Quit it from its icon next to the clock, then try again.";
+        if (quiet && Startup.LegacyTaskExists()) return "Legacy elevated startup task remains.";
         string err = Startup.Set(Startup.Mode.Off, !quiet); // silent package removal must never raise UAC
         if (err != null) return err;
+        if (!StopRunning()) return "physmouse is still running. Quit it from its icon next to the clock, then try again.";
         try
         {
             foreach (var lnk in new[] { Startup.StartMenuShortcut, Startup.DesktopShortcut })
@@ -146,8 +149,8 @@ static class Installer
     // Asks a running physmouse to quit, so its exe can be replaced or removed.
     static bool StopRunning()
     {
-        int self = Process.GetCurrentProcess().Id;
-        var others = Process.GetProcessesByName("physmouse").Where(p => p.Id != self).ToList();
+        int self = Process.GetCurrentProcess().Id, session = Process.GetCurrentProcess().SessionId;
+        var others = Process.GetProcessesByName("physmouse").Where(p => p.Id != self && InSession(p, session)).ToList();
         if (others.Count == 0) return true;
         StoppedRunningCopy = true;
         Program.AskRunningCopyToExit();
@@ -160,9 +163,18 @@ static class Installer
                 if (!p.WaitForExit(2000)) return false;
             }
             catch (Exception) { return false; } // e.g. an elevated copy we may not end
+            finally { p.Dispose(); }
         }
         return true;
     }
+
+    static bool InSession(Process p, int session)
+    {
+        try { return SameSession(p.SessionId, session); }
+        catch (Exception) { return false; }
+    }
+
+    public static bool SameSession(int processSession, int session) { return processSession == session; }
 
     public static string FormatVersion(Version v) { return v == null ? "?" : v.ToString(3); }
     public static string CurrentVersion { get { return Current.ToString(3); } }
