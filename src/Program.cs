@@ -64,12 +64,15 @@ static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Native.AllowDarkMenus();
 
-        // --quiet runs setup without any window, for package managers such as winget. Exit code 0 means success.
+        // --quiet runs setup without any window, for package managers such as winget. Exit code 2 means the legacy task remains.
         bool quiet = args.Contains("--quiet");
+        if (args.Contains("--remove-legacy-task") && !Packaged)
+            return Startup.RemoveLegacyTask(false, true) == null ? 0 : 1;
         if (args.Contains("--uninstall") && !Packaged)
         {
             if (quiet)
             {
+                if (Startup.LegacyTaskExists()) return 2;
                 bool ok = Installer.Uninstall(true, true) == null; // keeps settings: a silent uninstall shouldn't lose a layout
                 if (ok) Installer.RemoveFiles();
                 return ok ? 0 : 1;
@@ -84,9 +87,9 @@ static class Program
             var installed = Installer.InstalledExe;
             string dir = installed != null ? Path.GetDirectoryName(installed) : Installer.DefaultDir;
             // Start-at-sign-in is opt-in (--autostart); --no-autostart is still accepted from older setups. Upgrades keep the current state.
-            if (Installer.Install(dir, args.Contains("--autostart"), false, installed != null) != null) return 1;
+            if (Installer.Install(dir, args.Contains("--autostart"), false, installed != null, true) != null) return 1;
             if (Installer.StoppedRunningCopy) Process.Start(Installer.InstalledExe, "--background"); // an upgrade shouldn't leave it off
-            return 0;
+            return Startup.LegacyTaskExists() ? 2 : 0;
         }
 
         // Started by hand from a download: offer to install (or update) before anything else.
