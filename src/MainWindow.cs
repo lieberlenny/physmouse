@@ -488,23 +488,18 @@ class MainWindow : PaintedWindow
     void DragTo(Point p)
     {
         var others = edit.Where(n => n != drag).ToList();
-        drag.X = Snap(MmX(p.X) - grabX, drag.W, others.SelectMany(n => new[] { n.X, n.X + n.W }), out guideX);
-        drag.Y = Snap(MmY(p.Y) - grabY, drag.H, others.SelectMany(n => new[] { n.Y, n.Y + n.H }), out guideY);
+        double x = MmX(p.X) - grabX, y = MmY(p.Y) - grabY;
+        guideX = guideY = null;
+        if ((ModifierKeys & Keys.Alt) == 0) // hold Alt to place freely
+        {
+            double tol = 8 * s / scale; // 8 px on screen
+            x = Snap.Axis(x, drag.W, others.Select(n => new[] { n.X, n.W }).ToList(), tol, out guideX);
+            y = Snap.Axis(y, drag.H, others.Select(n => new[] { n.Y, n.H }).ToList(), tol, out guideY);
+        }
+        drag.X = x;
+        drag.Y = y;
         dirty = true;
         Invalidate();
-    }
-
-    // Snap either edge of [pos, pos+len] onto the nearest edge of another screen when within 8 px on screen.
-    // Hold Alt to place freely.
-    double Snap(double pos, double len, IEnumerable<double> edges, out double? guide)
-    {
-        guide = null;
-        if ((ModifierKeys & Keys.Alt) != 0) return pos;
-        double best = pos, bestD = 8 * s / scale;
-        foreach (var e in edges)
-            foreach (var cand in new[] { e, e - len })
-                if (Math.Abs(cand - pos) < bestD) { best = cand; bestD = Math.Abs(cand - pos); guide = e; }
-        return best;
     }
 
     // ------------------------------------------------ Behavior page

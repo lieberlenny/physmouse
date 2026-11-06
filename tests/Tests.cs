@@ -70,6 +70,19 @@ static class Tests
         r.ApplyTo(moved);
         Check(moved[0].X == -97 && moved[0].W == 797, "layout follows a screen to a new port");
 
+        // layout editor snapping: two 600 mm screens side by side at 0 and 600, dragging a 300 mm one
+        var pair = new List<double[]> { new double[] { 0, 600 }, new double[] { 600, 600 } };
+        var one = new List<double[]> { new double[] { 0, 600 } };
+        double? guide;
+        Check(Snap.Axis(148, 300, one, 5, out guide) == 150 && guide == 300, "centre snaps to another screen's centre");
+        Check(Snap.Axis(452, 300, pair, 5, out guide) == 450 && guide == 600, "centre snaps to the seam between two screens");
+        Check(Snap.Axis(597, 300, one, 5, out guide) == 600 && guide == 600, "edge snaps to touch another screen");
+        Check(Snap.Axis(-3, 300, one, 5, out guide) == 0 && guide == 0, "edges align");
+        Check(Snap.Axis(400, 300, one, 5, out guide) == 400 && guide == null, "far from everything: no snap");
+        var uneven = new List<double[]> { new double[] { 0, 500 }, new double[] { 700, 500 } };
+        Check(Snap.Axis(453, 300, uneven, 5, out guide) == 450 && guide == 600, "centre snaps to the middle of all screens");
+        Check(Snap.Axis(98, 300, uneven, 5, out guide) == 100 && guide == 250, "nearest snap wins");
+
         Console.WriteLine(failures == 0 ? "All tests passed." : failures + " test(s) failed.");
         return failures == 0 ? 0 : 1;
     }

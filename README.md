@@ -11,7 +11,7 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 
 ## Features
 
-- **Layout editor.** Drag screens to where they sit, or type exact positions and sizes in millimetres or inches. Edges snap to each other (hold Alt to place freely). Arrow keys nudge the selected screen by 1 mm, or by 10 mm with Shift. Physical sizes come from each screen's EDID, so you usually only need to arrange them.
+- **Layout editor.** Drag screens to where they sit, or type exact positions and sizes in millimetres or inches. Screens snap edge to edge, centre to centre, centred on the seam between two screens, or centred under all the others (hold Alt to place freely). Arrow keys nudge the selected screen by 1 mm, or by 10 mm with Shift. Physical sizes come from each screen's EDID, so you usually only need to arrange them.
 - **Live cursor preview.** The editor shows where your cursor is in the layout you're editing, before you apply it.
 - **Identify.** Shows a big number on every screen, so you can tell which tile is which.
 - **Gaps and offsets.** Screens don't have to touch. Moving across a gap takes the cursor straight to the screen on the other side.
