@@ -19,6 +19,6 @@ AppsAndFeaturesEntries:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/lieberlenny/physmouse/releases/download/v1.4.2/physmouse-v1.4.2-installer.exe
-    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000 # set from the release asset after CI builds it
+    InstallerSha256: D4A18A1852B0FAEDF5C637EAAB037BEF6CEEC886D9D1FB6866FA911A0AA3C0C0
 ManifestType: installer
 ManifestVersion: 1.12.0
