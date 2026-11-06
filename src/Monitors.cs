@@ -30,11 +30,15 @@ static class Monitors
         {
             string id, model;
             Describe(s.DeviceName, out id, out model);
-            int dup = list.Count(m => m.Id == id || m.Id.StartsWith(id + "~"));
-            if (dup > 0) id += "~" + (dup + 1); // same EDID twice, e.g. one panel split into two displays
             // DISPLAYn digits drift (e.g. 11, 12, 13 after a driver reinstall); show 1..N in the same order.
             var mon = new Mon { Id = id, Model = model, Number = list.Count + 1, R = s.Bounds, Primary = s.Primary };
-            Guess(mon, s.DeviceName);
+            bool split = Guess(mon, s.DeviceName);
+            // A split panel (Lenovo "true split") shows up as partial displays whose pixel shape differs from
+            // the panel's; give them their own ids so the unsplit layout isn't applied to (or overwritten by) a half.
+            if (split) id += "@" + s.Bounds.Width + "x" + s.Bounds.Height;
+            int dup = list.Count(m => m.Id == id || m.Id.StartsWith(id + "~"));
+            if (dup > 0) id += "~" + (dup + 1); // same EDID twice, e.g. two equal halves
+            mon.Id = id;
             list.Add(mon);
         }
         return list;
@@ -70,14 +74,18 @@ static class Monitors
         }
     }
 
-    static void Guess(Mon m, string device)
+    // Returns true when the screen's pixel shape doesn't match the panel's EDID shape (in either rotation).
+    static bool Guess(Mon m, string device)
     {
         IntPtr dc = Native.CreateDC(device, null, null, IntPtr.Zero);
         double w = Native.GetDeviceCaps(dc, 4), h = Native.GetDeviceCaps(dc, 6); // HORZSIZE / VERTSIZE, from EDID
         Native.DeleteDC(dc);
-        if (w <= 0 || h <= 0) { w = m.R.Width * 0.25; h = m.R.Height * 0.25; } // no EDID size: assume ~100 dpi
+        bool edid = w > 0 && h > 0;
+        if (!edid) { w = m.R.Width * 0.25; h = m.R.Height * 0.25; } // no EDID size: assume ~100 dpi
         double k = MmPerPixel(w, h, m.R.Width, m.R.Height);
         m.X = m.R.X * k; m.Y = m.R.Y * k; m.W = m.R.Width * k; m.H = m.R.Height * k;
+        double px = (double)m.R.Width / m.R.Height, mm = w / h;
+        return edid && Math.Abs(px / mm - 1) > 0.2 && Math.Abs(px * mm - 1) > 0.2;
     }
 
     // EDID sizes ignore rotation, and Windows may split one panel into several displays that all

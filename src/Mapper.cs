@@ -20,6 +20,7 @@ static class Mapper
     static IntPtr hook;
     static SynchronizationContext hookThread;
     static int pushed; // edge-resistance progress, only touched on the hook thread
+    const int Inset = 6; // pixels past the border where a crossing lands
 
     // The hook gets its own thread and message loop, so a busy UI can never stall the cursor.
     public static void Start()
@@ -138,8 +139,10 @@ static class Mapper
         if (mv.To == null) return true;
         var b = mv.To.R;
         var t = mv.To;
-        int tx = dir == 0 ? b.Left : dir == 1 ? b.Right - 1 : b.Left + (int)((mx - t.X) / t.W * b.Width);
-        int ty = dir == 2 ? b.Top : dir == 3 ? b.Bottom - 1 : b.Top + (int)((my - t.Y) / t.H * b.Height);
+        // Land a few pixels inside, so a 1px wobble right after crossing doesn't send the cursor straight back
+        // (it would jump back and forth by the physical offset between the two screens).
+        int tx = dir == 0 ? b.Left + Inset : dir == 1 ? b.Right - 1 - Inset : b.Left + (int)((mx - t.X) / t.W * b.Width);
+        int ty = dir == 2 ? b.Top + Inset : dir == 3 ? b.Bottom - 1 - Inset : b.Top + (int)((my - t.Y) / t.H * b.Height);
         mv.Target = new Point(Math.Max(b.Left, Math.Min(b.Right - 1, tx)), Math.Max(b.Top, Math.Min(b.Bottom - 1, ty)));
         return true;
     }

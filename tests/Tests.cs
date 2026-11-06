@@ -31,12 +31,12 @@ static class Tests
         var ms = new List<Mon> { a, b, c };
 
         Check(Land(ms, new Point(10, 10), new Point(20, 20)) == null, "move inside a screen is left to Windows");
-        Check(Land(ms, new Point(2559, 720), new Point(2565, 720)) == new Point(2560, 580), "a -> b lands at the same physical height");
-        Check(Land(ms, new Point(2560, 1659), new Point(2550, 1659)) == new Point(2559, 1439), "b -> a at the bottom");
+        Check(Land(ms, new Point(2559, 720), new Point(2565, 720)) == new Point(2566, 580), "a -> b lands at the same physical height");
+        Check(Land(ms, new Point(2560, 1659), new Point(2550, 1659)) == new Point(2553, 1439), "b -> a at the bottom");
         Check(Land(ms, new Point(100, 0), new Point(100, -5)) == new Point(100, 0), "nothing above a: stop at the edge");
-        Check(Land(ms, new Point(3840, 1659), new Point(3840, 1665)) == new Point(9568, 9000), "b -> c across the gap");
+        Check(Land(ms, new Point(3840, 1659), new Point(3840, 1665)) == new Point(9568, 9006), "b -> c across the gap");
         Check(Land(ms, new Point(2565, 1659), new Point(2565, 1665)) == new Point(2565, 1659), "nothing under b's left part");
-        Check(Land(ms, new Point(9500, 9000), new Point(9500, 8990)) == new Point(3763, 1659), "c -> b");
+        Check(Land(ms, new Point(9500, 9000), new Point(9500, 8990)) == new Point(3763, 1653), "c -> b");
         Check(Land(ms, new Point(-5, -5), new Point(-6, -6)) == null, "cursor off every screen is left to Windows");
 
         Move mv;
