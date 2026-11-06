@@ -63,12 +63,20 @@ static class Installer
         return v == null || Current > v ? Offer.Update : Offer.None;
     }
 
+    // Set by Install when it succeeded but the legacy task from 1.3.0 or older is still there.
+    public static string Note;
+
     // Copies this exe into dir and registers it. Returns null on success, otherwise a message for the user.
     public static string Install(string dir, bool startWithWindows, bool desktopShortcut, bool update, bool quiet = false)
     {
         var startup = update ? Startup.Current() : Startup.Policed(startWithWindows ? Startup.Mode.User : Startup.Mode.Off);
-        string taskError = Startup.RemoveLegacyTask(!quiet);
-        if (taskError != null && !(quiet && Startup.LegacyTaskExists())) return taskError;
+        // A legacy task left in place doesn't block the install, so standard users can still update:
+        // quiet installs report it with exit code 2, the wizard says so on its last page.
+        if (quiet) Startup.RemoveLegacyTask(false);
+        else Startup.RemoveLegacyTaskAsking("Remove it as part of this " + (update ? "update?" : "setup?"));
+        Note = Startup.LegacyTaskExists()
+            ? "The old administrator startup task from physmouse 1.3.0 or older is still there. physmouse will ask about it again when you open it; without administrator rights, ask an administrator to remove it."
+            : null;
         if (!StopRunning()) return "physmouse is still running. Quit it from its icon next to the clock, then try again.";
         string exe = Path.Combine(dir, "physmouse.exe");
         try
@@ -114,8 +122,10 @@ static class Installer
     public static string Uninstall(bool keepSettings, bool quiet = false)
     {
         if (quiet && Startup.LegacyTaskExists()) return "Legacy elevated startup task remains.";
-        string err = Startup.Set(Startup.Mode.Off, !quiet); // silent package removal must never raise UAC
-        if (err != null) return err;
+        // Silent package removal must never raise UAC. A task left pointing at a deleted exe in a user
+        // folder is worse than leaving physmouse installed, so the interactive uninstall stops if it stays.
+        string err = Startup.Remove(!quiet);
+        if (err != null) return err == Startup.Declined ? "Nothing was removed, because the old administrator startup task is still there." : err;
         if (!StopRunning()) return "physmouse is still running. Quit it from its icon next to the clock, then try again.";
         try
         {

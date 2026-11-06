@@ -144,7 +144,7 @@ class SetupWindow : PaintedWindow
         Cursor = Cursors.WaitCursor;
         error = mode == Mode.Uninstall ? Installer.Uninstall(keepSettings) : Installer.Install(dir, autostart, desktop, mode == Mode.Update);
         Cursor = Cursors.Default;
-        if (error == null) { finished = true; Result = Outcome.Done; }
+        if (error == null) { finished = true; Result = Outcome.Done; if (mode != Mode.Uninstall) error = Installer.Note; }
         Invalidate();
     }
 

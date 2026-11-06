@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Security.Principal;
 using System.Xml;
@@ -55,50 +56,94 @@ static class Startup
         if (Policed(now) != now) Set(Policed(now), false);
     }
 
-    // Returns null on success, otherwise a message for the user.
+    // Returns null on success, otherwise a message for the user. With elevate, a legacy task is
+    // explained first and removed through UAC; without, it must already be gone (or we're elevated).
     public static string Set(Mode mode, bool elevate = true)
     {
         if (Policed(mode) != mode) return "Your organization manages this setting.";
-        string err = RemoveLegacyTask(elevate);
+        string err = elevate ? RemoveLegacyTaskAsking("Remove it now?") : RemoveLegacyTask(false);
         if (err != null) return err;
         SetRunEntry(mode == Mode.User);
         return null;
     }
 
-    // Up to 1.3.0, "On, as administrator" registered a logon task that ran physmouse.exe with highest
-    // privileges from the per-user install folder. Anything running as the user can replace that exe,
-    // so the task was a way around UAC; manual starts now ask to remove it and restore a normal entry.
-    public static void MigrateLegacyTask()
+    // For uninstalling: removes the startup entry even where policy forces it on, since the program
+    // it would start is about to go. The legacy task still has to go first (see Installer.Uninstall).
+    public static string Remove(bool interactive)
     {
-        if (!LegacyTaskExists()) return;
-        if (Schtasks("/Delete /TN physmouse /F", !Elevated) == null && Policed(Mode.User) == Mode.User) SetRunEntry(true);
+        string err = interactive ? RemoveLegacyTaskAsking("Remove it as part of uninstalling?") : RemoveLegacyTask(false);
+        if (err != null) return err;
+        SetRunEntry(false);
+        return null;
     }
 
+    // Up to 1.3.0, "On, as administrator" registered a logon task "\physmouse" that ran physmouse.exe with
+    // highest privileges from the per-user install folder (or wherever a portable copy sat). Anything
+    // running as the user can replace that exe, so the task was a way around UAC.
+    // When the task itself started us elevated, it's removed silently. Otherwise only a start by hand
+    // asks (explained, then UAC); a start at sign-in (--background) never prompts.
+    public static void MigrateLegacyTask(bool interactive)
+    {
+        if (!LegacyTaskExists()) return;
+        if (!Elevated && !interactive) return;
+        string err = Elevated ? Schtasks(DeleteTask, false) : RemoveLegacyTaskAsking("Remove it now?");
+        if (err == null) { if (Policed(Mode.User) == Mode.User) SetRunEntry(true); }
+        else if (err != Declined && !Elevated && LegacyTaskExists())
+            MessageBox.Show("The task is still there, so physmouse will ask again next time you open it. " + err, "physmouse", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    const string DeleteTask = "/Delete /TN physmouse /F";
+    public const string Declined = "The old administrator startup task is still there.";
+    const string LegacyExplained = "An older version of physmouse (1.3.0 or earlier) registered a task that starts it with administrator rights when you sign in. "
+        + "It's no longer used, and other programs could misuse it to get administrator rights without asking.";
+
+    // The task named \physmouse, if it starts an exe that a standard user could replace. Checked by name
+    // and folder rather than by our own path, so it also finds tasks of portable copies and works as SYSTEM.
+    // A task that starts physmouse from Program Files was set up by an administrator on purpose; it stays.
     public static bool LegacyTaskExists()
     {
         var p = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN physmouse /XML") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true });
         string xml = p.StandardOutput.ReadToEnd();
+        p.StandardError.ReadToEnd();
         p.WaitForExit();
-        if (p.ExitCode != 0) return false;
-        string expected = Installer.InstalledExe ?? Path.Combine(Installer.DefaultDir, "physmouse.exe");
-        return IsLegacyTask(xml, expected) || IsLegacyTask(xml, Application.ExecutablePath);
+        return p.ExitCode == 0 && IsLegacyTask(xml, ProtectedFolders());
     }
 
-    public static bool IsLegacyTask(string xml, string expectedExe)
+    static string[] ProtectedFolders()
+    {
+        return new[] { Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86, Environment.SpecialFolder.Windows }
+            .Select(f => Environment.GetFolderPath(f)).Where(f => f != "").ToArray();
+    }
+
+    public static bool IsLegacyTask(string xml, string[] protectedFolders)
     {
         try
         {
             var doc = new XmlDocument();
             doc.LoadXml(xml);
             var command = doc.SelectSingleNode("//*[local-name()='Command']");
-            return command != null && string.Equals(Path.GetFullPath(Environment.ExpandEnvironmentVariables(command.InnerText.Trim().Trim('"'))), Path.GetFullPath(expectedExe), StringComparison.OrdinalIgnoreCase);
+            if (command == null) return false;
+            string exe = Path.GetFullPath(Environment.ExpandEnvironmentVariables(command.InnerText.Trim().Trim('"')));
+            return !protectedFolders.Any(f => exe.StartsWith(Path.GetFullPath(f).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase));
         }
-        catch (Exception) { return false; }
+        catch (Exception) { return true; } // a \physmouse task we can't read is treated as the old one
     }
 
-    public static string RemoveLegacyTask(bool elevate, bool force = false)
+    // Removes the legacy task if there is one. Null when it's gone (or never existed).
+    public static string RemoveLegacyTask(bool elevate)
     {
-        return force || LegacyTaskExists() ? Schtasks("/Delete /TN physmouse /F", elevate) : null;
+        return LegacyTaskExists() ? Schtasks(DeleteTask, elevate) : null;
+    }
+
+    // Like RemoveLegacyTask with UAC, but says why before Windows asks for administrator permission.
+    public static string RemoveLegacyTaskAsking(string question)
+    {
+        if (!LegacyTaskExists()) return null;
+        if (Elevated) return Schtasks(DeleteTask, false);
+        if (MessageBox.Show(LegacyExplained + "\n\n" + question + " Windows will ask for administrator permission.",
+            "physmouse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            return Declined;
+        return Schtasks(DeleteTask, true);
     }
 
     // Windows only runs a Run entry at sign-in when StartupApproved marks it enabled (Task Manager's

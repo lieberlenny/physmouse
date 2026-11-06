@@ -62,8 +62,15 @@ static class Tests
             "implausible layout values (NaN, infinity, huge, tiny) are dropped");
         Check(Settings.ParseHotkey("ctrl+alt+lbutton") == Keys.None, "mouse buttons are not shortcut keys");
         Check(Installer.SameSession(3, 3) && !Installer.SameSession(3, 4), "installer only targets physmouse processes in this session");
-        Check(Startup.IsLegacyTask("<Task><Actions><Exec><Command>C:\\Program Files\\physmouse\\physmouse.exe</Command></Exec></Actions></Task>", "C:\\Program Files\\physmouse\\physmouse.exe"), "legacy task is recognized by its executable path");
-        Check(!Startup.IsLegacyTask("<Task><Actions><Exec><Command>C:\\Other\\physmouse.exe</Command></Exec></Actions></Task>", "C:\\Program Files\\physmouse\\physmouse.exe"), "unrelated task with the same name is preserved");
+        // legacy task: \physmouse starting an exe a standard user could replace, wherever that is
+        var admin = new[] { @"C:\Program Files", @"C:\Program Files (x86)", @"C:\WINDOWS" };
+        Func<string, string> task = cmd => "<Task xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Actions><Exec><Command>" + cmd + "</Command><Arguments>--background</Arguments></Exec></Actions></Task>";
+        Check(Startup.IsLegacyTask(task(@"C:\Users\x\AppData\Local\Programs\physmouse\physmouse.exe"), admin), "legacy task in the per-user install folder is recognized");
+        Check(Startup.IsLegacyTask(task("\"%LOCALAPPDATA%\\Programs\\physmouse\\physmouse.exe\""), admin), "quoted path with variables is recognized");
+        Check(Startup.IsLegacyTask(task(@"D:\Tools\physmouse-portable\physmouse.exe"), admin), "legacy task of a portable copy is recognized");
+        Check(!Startup.IsLegacyTask(task(@"C:\Program Files\physmouse\physmouse.exe"), admin), "a task starting physmouse from Program Files is kept");
+        Check(Startup.IsLegacyTask(task(@"C:\Program Files Evil\physmouse.exe"), admin), "a folder that only starts like Program Files doesn't count");
+        Check(!Startup.IsLegacyTask("<Task><Actions><ComHandler><ClassId>{0}</ClassId></ComHandler></Actions></Task>", admin), "a task without a command is left alone");
 
         // a screen whose connection id changed still finds its saved place by EDID product code
         var moved = new List<Mon> { new Mon { Id = @"LEN68F6\7&abc&0&UID999", X = 1, Y = 1, W = 1, H = 1 } };

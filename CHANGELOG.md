@@ -2,6 +2,19 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
+## Unreleased
+
+Follow-ups to the GHSA-pvgf-f87w-4jfp fix from deployment testing (issue #11, thanks to @toseparo).
+
+### Fixed
+- When the elevated task from 1.3.0 or older can't be removed silently, physmouse no longer shows a bare UAC prompt at every sign-in. Starts at sign-in (`--background`, including the restart after a quiet upgrade) never prompt; a start by hand explains the task first and asks before Windows' administrator prompt, as 1.4.0's notes already described.
+- An interactive update no longer fails when that prompt is declined (for example by a standard user). It installs, keeps the task, and says on its last page that the task remains.
+- The task is recognized by its name `\physmouse` and by starting an exe outside `Program Files` and the Windows folder, instead of by the current user's install path. `--remove-legacy-task` now finds it when run as SYSTEM, also removes tasks registered by a portable copy, and returns 0 when there's no task, as documented. A `\physmouse` task that starts physmouse from `Program Files` is left alone.
+- `--uninstall --quiet` no longer fails with exit code 1 when the `ForceAutostart` policy is set.
+
+### Docs
+- README: the detection rule uses only the `DisplayVersion` registry value (the exe is deleted a moment after uninstalling), a note on `Start-Process -Wait` and the restarted copy, and what `--remove-legacy-task` removes. The winget notes point out that the copy in `%LOCALAPPDATA%` must not be run as SYSTEM.
+
 ## 1.4.1 (2026-11-06)
 
 No changes to the app. The Microsoft Store got an early 1.4.0 package that was built before the security fixes below were merged; Store package numbers can't be reused, so this release ships the same code as 1.4.0 under a new number. Everything listed under 1.4.0 applies.

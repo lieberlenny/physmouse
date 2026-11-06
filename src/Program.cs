@@ -66,8 +66,9 @@ static class Program
 
         // --quiet runs setup without any window, for package managers such as winget. Exit code 2 means the legacy task remains.
         bool quiet = args.Contains("--quiet");
+        // For administrators and SYSTEM: 0 when the task is gone or was never there.
         if (args.Contains("--remove-legacy-task") && !Packaged)
-            return Startup.RemoveLegacyTask(false, true) == null ? 0 : 1;
+            return Startup.RemoveLegacyTask(false) == null ? 0 : 1;
         if (args.Contains("--uninstall") && !Packaged)
         {
             if (quiet)
@@ -122,7 +123,7 @@ static class Program
         bool firstRun = !Cfg.Existed;
         // Keep startup entries and shortcuts pointing at this copy, unless it's a stray copy next to an installed one.
         if (!Packaged && (Installer.InstalledExe == null || Installer.RunningInstalled))
-            try { Startup.MigrateLegacyTask(); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
+            try { Startup.MigrateLegacyTask(!background); Startup.Reconcile(); Startup.Enforce(); } catch (Exception) { } // a locked shortcut or registry key isn't worth failing over
         if (Packaged) try { Startup.Store.Enforce(); } catch (Exception) { }
         Refresh();
         if (firstRun) { Cfg.Store(Mapper.Mons); Cfg.Save(); }
