@@ -1,6 +1,6 @@
 # Microsoft Store (MSIX)
 
-`pack.cmd` builds `bin\physmouse.msix`. It needs the Windows SDK for `makeappx` and `makepri`; the app itself still builds without it. The package is left unsigned because the Store signs it on upload.
+`pack.cmd` builds `bin\physmouse.msix`. It needs the Windows SDK for `makeappx` and `makepri`; instead of installing the SDK you can unpack the `Microsoft.Windows.SDK.BuildTools` NuGet package and set `SDK_BIN` to its `bin\<version>\x64` folder. The app itself still builds without either. The package is left unsigned because the Store signs it on upload.
 
 `Name`, `Publisher` and `PublisherDisplayName` in `AppxManifest.xml` are the values under Partner Center > physmouse > Product identity (Store ID 9P31NQHKW1NR). Keep `Version` in step with `AssemblyVersion` in `src/Program.cs`. The fourth number must be 0.
 

@@ -2,10 +2,14 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
-## 1.3.2 (2026-10-27)
+## 1.4.0 (2026-11-06)
 
 ### Added
 - The layout editor also snaps a dragged screen's centre: to another screen's centre, to the seam where two screens meet, and to the middle of all other screens. A dashed guide shows where it snapped; Alt still places freely.
+
+### Fixed
+- After crossing to another screen the cursor lands a few pixels inside it, so a 1 px wobble no longer sends it straight back.
+- A screen that Windows splits into several displays (such as Lenovo's "true split") keeps a separate layout per split, instead of the halves taking over the whole panel's place.
 
 ### Security
 - The fix in 1.3.1 for the "On, as administrator" task was incomplete: an upgrade without administrator rights (winget, Intune, `--install --quiet`) left the task in place until it next fired, and anything running as the user could swap the exe it starts in the meantime. physmouse now offers to remove the task (with a UAC prompt) whenever it's started by hand or set up interactively, and `--install --quiet` / `--uninstall --quiet` return exit code 2 while the task exists, so admins can find and remove it, for example with the new `--remove-legacy-task` switch run as SYSTEM. Affects administrators who turned on "On, as administrator" in 1.3.0 or older. (GHSA-pvgf-f87w-4jfp)

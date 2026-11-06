@@ -5,8 +5,9 @@ setlocal
 cd /d "%~dp0..\.."
 call .\build.cmd || exit /b 1
 
-set SDK=
-for /d %%d in ("%ProgramFiles(x86)%\Windows Kits\10\bin\10.*") do if exist "%%d\x64\makeappx.exe" set "SDK=%%d\x64"
+rem SDK_BIN may point at a folder with makeappx/makepri, e.g. from the Microsoft.Windows.SDK.BuildTools NuGet package.
+set "SDK=%SDK_BIN%"
+if not defined SDK for /d %%d in ("%ProgramFiles(x86)%\Windows Kits\10\bin\10.*") do if exist "%%d\x64\makeappx.exe" set "SDK=%%d\x64"
 if not defined SDK echo Windows SDK not found. & exit /b 1
 
 set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
