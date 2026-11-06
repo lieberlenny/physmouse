@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 PackageIdentifier: LieberLenny.physmouse
-PackageVersion: 1.4.0
+PackageVersion: 1.4.1
 InstallerType: exe
 Scope: user
 InstallModes:
@@ -18,7 +18,7 @@ AppsAndFeaturesEntries:
     Publisher: Lennart Blees
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/lieberlenny/physmouse/releases/download/v1.4.0/physmouse-v1.4.0-installer.exe
-    InstallerSha256: B862014006BE40DE74A11EA4A04955E8E3EA9A6490FC5F31ABC41FA01C87912F
+    InstallerUrl: https://github.com/lieberlenny/physmouse/releases/download/v1.4.1/physmouse-v1.4.1-installer.exe
+    InstallerSha256: 6ADB48F5D9F0E92857916740FE41607E391A0AD1E431F3C27E7CF00AD71722E0
 ManifestType: installer
 ManifestVersion: 1.12.0
