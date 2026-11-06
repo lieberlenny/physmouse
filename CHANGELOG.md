@@ -2,6 +2,10 @@
 
 Each version has a git tag `v<version>`. The Microsoft Store package of a version carries the same number with a trailing `.0` (Store `1.2.1.0` is tag `v1.2.1`).
 
+## 1.4.1 (2026-11-06)
+
+No changes to the app. The Microsoft Store got an early 1.4.0 package that was built before the security fixes below were merged; Store package numbers can't be reused, so this release ships the same code as 1.4.0 under a new number. Everything listed under 1.4.0 applies.
+
 ## 1.4.0 (2026-11-06)
 
 ### Added
