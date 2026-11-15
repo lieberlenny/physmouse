@@ -24,6 +24,31 @@ physmouse fixes that. You tell it where your screens actually sit on your desk, 
 - **Remembers every screen.** Layouts are stored per physical screen, so unplugging a screen and plugging it back in keeps its place. When a new screen is connected, physmouse asks you to place it.
 - Follows Windows' light or dark mode and your accent colour.
 
+## Bridge mode
+
+On setups with three or more monitors, multiple screens often share the same edge. For example, a large center screen may have two smaller screens stacked to its right, or a row of screens above it. Without bridge mode, the cursor crosses the full edge and physmouse picks the closest neighbor -- but when two monitors both face the same edge, the cursor can land on the wrong one or get stuck.
+
+Bridge mode solves this by dividing each edge into zones, one per neighbor. Each zone covers only the portion of the edge that physically faces its target monitor. The cursor can only cross within a zone, and each zone routes to a specific screen.
+
+![6-monitor setup with bridge overlays showing zones on every screen edge](docs/images/bridge-setup-full.jpg)
+
+**Use case: keeping the Windows top-edge gesture on your main monitor.** Windows 11 uses the top edge of the primary screen for Snap layouts and the desktop switcher. On a multi-monitor setup where a screen sits above the primary, physmouse would normally let the cursor cross the top edge freely. Bridge mode lets you remove the top-edge bridge on your main monitor while keeping all other crossings, so the Windows top-edge gesture stays functional and the cursor still reaches the upper screen through its side edges.
+
+![Close-up showing the bridge setup UI with Claude Code building the PR in the terminal](docs/images/bridge-setup-closeup.jpg)
+
+### How it works
+
+1. Open the physmouse settings window and click **Bridge Setup**.
+2. physmouse generates smart defaults by sampling each edge and creating non-overlapping zones. Each zone gets a numbered badge showing which screen it connects to.
+3. Click the **+** button on any edge to add a bridge. When you add a bridge, the reciprocal bridge on the target screen is created automatically.
+4. Drag the handles on any bridge bar to resize it, or drag the bar itself to reposition it. Each side of a paired bridge can be adjusted independently to account for physical mount angle differences.
+5. Right-click a bridge bar to remove it. The paired bridge on the other screen is removed as well.
+6. Click **Save** when done, or **Cancel** to discard changes.
+
+![Right side of the setup showing bridge zones on screens 4 and 5](docs/images/bridge-setup-right-side.jpg)
+
+Bridge settings are saved in the `[bridges]` section of `settings.ini` and persist across restarts.
+
 ## Resource usage
 
 physmouse stays out of the way in the background: about 0.1% CPU, around 8 MB of memory and no network traffic apart from an update check at startup, in Task Manager (measured on an AMD Ryzen 7 9850X3D, 32 GB DDR5-6000 CL36, Windows 11 26H2). It only steps in when the cursor crosses a screen edge.
