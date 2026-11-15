@@ -125,25 +125,79 @@ static class Mapper
         double mx = m.X + (cx - r.Left + 0.5) * m.W / r.Width, my = m.Y + (cy - r.Top + 0.5) * m.H / r.Height;
         int dir = p.X >= r.Right ? 0 : p.X < r.Left ? 1 : p.Y >= r.Bottom ? 2 : 3; // right, left, down, up
         bool horiz = dir < 2;
+
+        // Bridge filtering: once any bridges are configured, every crossing must go through a bridge zone.
+        // An edge with no bridges is fully blocked. A matched bridge routes to its TargetScreenId directly.
+        var bridges = Cfg.Bridges;
+        if (bridges.Count > 0)
+        {
+            string edgeName = dir == 0 ? "Right" : dir == 1 ? "Left" : dir == 2 ? "Bottom" : "Top";
+            int edgeLen = horiz ? r.Height : r.Width;
+            int posAlongEdge = horiz ? (cy - r.Top) : (cx - r.Left);
+            bool hasEdgeBridge = false;
+            Bridge matched = null;
+            for (int i = 0; i < bridges.Count; i++)
+            {
+                var br = bridges[i];
+                if (!br.ScreenId.Equals(m.Id, StringComparison.OrdinalIgnoreCase) || !br.Edge.Equals(edgeName, StringComparison.OrdinalIgnoreCase)) continue;
+                hasEdgeBridge = true;
+                int start = br.TopOffset;
+                int end = edgeLen - br.BottomOffset;
+                if (posAlongEdge >= start && posAlongEdge < end) { matched = br; break; }
+            }
+            if (!hasEdgeBridge)
+            {
+                mv.To = null;
+                return true;
+            }
+            if (matched == null)
+            {
+                mv.To = null;
+                return true;
+            }
+            // Route to the target specified by the bridge, or fall back to FindNeighbor for legacy bridges
+            if (!string.IsNullOrEmpty(matched.TargetScreenId))
+            {
+                Mon target = null;
+                for (int i = 0; i < ms.Count; i++)
+                    if (ms[i].Id != null && ms[i].Id.Equals(matched.TargetScreenId, StringComparison.OrdinalIgnoreCase)) { target = ms[i]; break; }
+                mv.To = target;
+            }
+            else
+            {
+                mv.To = FindNeighbor(ms, m, dir, mx, my);
+            }
+        }
+        else
+        {
+            mv.To = FindNeighbor(ms, m, dir, mx, my);
+        }
+        if (mv.To == null) return true;
+        var b2 = mv.To.R;
+        var t2 = mv.To;
+        int tx = dir == 0 ? b2.Left + Inset : dir == 1 ? b2.Right - 1 - Inset : b2.Left + (int)((mx - t2.X) / t2.W * b2.Width);
+        int ty = dir == 2 ? b2.Top + Inset : dir == 3 ? b2.Bottom - 1 - Inset : b2.Top + (int)((my - t2.Y) / t2.H * b2.Height);
+        mv.Target = new Point(Math.Max(b2.Left, Math.Min(b2.Right - 1, tx)), Math.Max(b2.Top, Math.Min(b2.Bottom - 1, ty)));
+        return true;
+    }
+
+    // Find the closest monitor across from m's edge in direction dir (0=Right, 1=Left, 2=Down, 3=Up)
+    // at the given physical mm position along the edge. Returns null if no neighbor is reachable.
+    public static Mon FindNeighbor(List<Mon> ms, Mon m, int dir, double physX, double physY)
+    {
+        bool horiz = dir < 2;
+        Mon best = null;
         double bestGap = double.MaxValue;
         foreach (var n in ms)
         {
             if (n == m) continue;
-            double along = horiz ? my : mx, lo = horiz ? n.Y : n.X, len = horiz ? n.H : n.W;
-            if (along < lo || along >= lo + len) continue; // not across from where we leave
+            double along = horiz ? physY : physX, lo = horiz ? n.Y : n.X, len = horiz ? n.H : n.W;
+            if (along < lo || along >= lo + len) continue;
             double gap = dir == 0 ? n.X - (m.X + m.W) : dir == 1 ? m.X - (n.X + n.W)
                        : dir == 2 ? n.Y - (m.Y + m.H) : m.Y - (n.Y + n.H);
-            if (gap + (horiz ? n.W : n.H) / 2 <= 0) continue; // its centre isn't past our edge: wrong side
-            if (gap < bestGap) { mv.To = n; bestGap = gap; }
+            if (gap + (horiz ? n.W : n.H) / 2 <= 0) continue;
+            if (gap < bestGap) { best = n; bestGap = gap; }
         }
-        if (mv.To == null) return true;
-        var b = mv.To.R;
-        var t = mv.To;
-        // Land a few pixels inside, so a 1px wobble right after crossing doesn't send the cursor straight back
-        // (it would jump back and forth by the physical offset between the two screens).
-        int tx = dir == 0 ? b.Left + Inset : dir == 1 ? b.Right - 1 - Inset : b.Left + (int)((mx - t.X) / t.W * b.Width);
-        int ty = dir == 2 ? b.Top + Inset : dir == 3 ? b.Bottom - 1 - Inset : b.Top + (int)((my - t.Y) / t.H * b.Height);
-        mv.Target = new Point(Math.Max(b.Left, Math.Min(b.Right - 1, tx)), Math.Max(b.Top, Math.Min(b.Bottom - 1, ty)));
-        return true;
+        return best;
     }
 }
