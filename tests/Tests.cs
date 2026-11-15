@@ -90,6 +90,83 @@ static class Tests
         Check(Snap.Axis(453, 300, uneven, 5, out guide) == 450 && guide == 600, "centre snaps to the middle of all screens");
         Check(Snap.Axis(98, 300, uneven, 5, out guide) == 100 && guide == 250, "nearest snap wins");
 
+        // --- Bridge tests ---
+
+        // Split-edge defaults: A's right edge faces B (top half) and C (bottom half)
+        var ba = new Mon { Id = "BA", R = new Rectangle(0, 0, 1920, 1080), X = 0, Y = 0, W = 500, H = 280 };
+        var bb = new Mon { Id = "BB", R = new Rectangle(1920, 0, 1920, 1080), X = 510, Y = 0, W = 500, H = 140 };
+        var bc = new Mon { Id = "BC", R = new Rectangle(3840, 0, 1920, 1080), X = 510, Y = 140, W = 500, H = 140 };
+        var bms = new List<Mon> { ba, bb, bc };
+        var defaults = BridgeWindow.GenerateDefaultBridges(bms);
+        // BA's right edge should have two bridges: one to BB, one to BC
+        var baRight = defaults.FindAll(d => d.ScreenId == "BA" && d.Edge == "Right");
+        Check(baRight.Count == 2, "split-edge defaults produce two bridges on BA right");
+        var toBB = baRight.Find(d => d.TargetScreenId == "BB");
+        var toBC = baRight.Find(d => d.TargetScreenId == "BC");
+        Check(toBB != null && toBC != null, "split-edge defaults target BB and BC");
+        // They should not overlap: BB bridge ends before BC bridge starts
+        if (toBB != null && toBC != null)
+        {
+            int bbEnd = 1080 - toBB.BottomOffset;
+            int bcStart = toBC.TopOffset;
+            Check(bbEnd <= bcStart || toBB.TopOffset >= 1080 - toBC.BottomOffset, "split-edge bridges do not overlap");
+        }
+
+        // Bridge-aware routing: two bridges on the same edge with different targets
+        Mapper.Cfg = new Settings();
+        Mapper.Cfg.Bridges.Add(new Bridge { ScreenId = "BA", Edge = "Right", TopOffset = 0, BottomOffset = 540, TargetScreenId = "BB" });
+        Mapper.Cfg.Bridges.Add(new Bridge { ScreenId = "BA", Edge = "Right", TopOffset = 540, BottomOffset = 0, TargetScreenId = "BC" });
+        Move bmv;
+        // Cursor in top half (y=200) should route to BB
+        Mapper.Plan(bms, new Point(1919, 200), new Point(1925, 200), out bmv);
+        Check(bmv.To == bb, "bridge routes top-half cursor to BB");
+        // Cursor in bottom half (y=800) should route to BC
+        Mapper.Plan(bms, new Point(1919, 800), new Point(1925, 800), out bmv);
+        Check(bmv.To == bc, "bridge routes bottom-half cursor to BC");
+        // Cursor outside all bridges on an edge with bridges is blocked
+        Mapper.Cfg.Bridges.Clear();
+        Mapper.Cfg.Bridges.Add(new Bridge { ScreenId = "BA", Edge = "Right", TopOffset = 100, BottomOffset = 100, TargetScreenId = "BB" });
+        Mapper.Plan(bms, new Point(1919, 50), new Point(1925, 50), out bmv);
+        Check(bmv.To == null, "cursor outside bridge zone is blocked");
+
+        // Bridge settings round-trip
+        var bs = new Settings();
+        bs.Bridges.Add(new Bridge { ScreenId = "X", Edge = "Right", TopOffset = 10, BottomOffset = 20, TargetScreenId = "Y" });
+        bs.Store(new Mon[0]);
+        var bp = Settings.Parse(bs.Format());
+        Check(bp.Bridges.Count == 1 && bp.Bridges[0].TargetScreenId == "Y" && bp.Bridges[0].TopOffset == 10 && bp.Bridges[0].BottomOffset == 20, "bridge with TargetScreenId round-trips");
+
+        // Real-world 6-monitor layout: monitor 1's left edge should produce exactly 2 bridges (to mon3 and mon6)
+        var m1 = new Mon { Id = "M1", R = new Rectangle(0, 0, 3840, 2160), X = 0, Y = 60.6, W = 698, H = 392.6 };
+        var m2 = new Mon { Id = "M2", R = new Rectangle(3840, 0, 1920, 1080), X = 698, Y = 118.2, W = 595.6, H = 335 };
+        var m3 = new Mon { Id = "M3", R = new Rectangle(-1920, 0, 1920, 1080), X = -595.6, Y = 118.2, W = 595.6, H = 335 };
+        var m4 = new Mon { Id = "M4", R = new Rectangle(1000, -1080, 1920, 1080), X = 102.4, Y = -274.4, W = 595.6, H = 335 };
+        var m5 = new Mon { Id = "M5", R = new Rectangle(3840, -1080, 1920, 1080), X = 772.7, Y = -174.8, W = 520.9, H = 293 };
+        var m6 = new Mon { Id = "M6", R = new Rectangle(-1920, -1080, 1920, 1080), X = -595.6, Y = -174.8, W = 520.9, H = 293 };
+        var realMs = new List<Mon> { m1, m2, m3, m4, m5, m6 };
+        var realDefaults = BridgeWindow.GenerateDefaultBridges(realMs);
+        var m1Left = realDefaults.FindAll(d => d.ScreenId == "M1" && d.Edge == "Left");
+        Check(m1Left.Count == 2, "6-mon layout: M1 left edge has 2 bridges (got " + m1Left.Count + ")");
+        Check(m1Left.Exists(d => d.TargetScreenId == "M3"), "6-mon layout: M1 left has bridge to M3");
+        Check(m1Left.Exists(d => d.TargetScreenId == "M6"), "6-mon layout: M1 left has bridge to M6");
+        // Verify non-overlapping
+        if (m1Left.Count == 2)
+        {
+            var toM3 = m1Left.Find(d => d.TargetScreenId == "M3");
+            var toM6 = m1Left.Find(d => d.TargetScreenId == "M6");
+            int m3End = 2160 - toM3.BottomOffset;
+            int m6End = 2160 - toM6.BottomOffset;
+            Check(toM6.TopOffset + toM6.BottomOffset > 0 || toM3.TopOffset + toM3.BottomOffset > 0, "6-mon layout: bridges are not full-edge");
+            Check(m6End <= toM3.TopOffset || m3End <= toM6.TopOffset, "6-mon layout: M1 left bridges do not overlap");
+        }
+
+        // Backward compat: empty TargetScreenId falls back to FindNeighbor
+        Mapper.Cfg = new Settings();
+        Mapper.Cfg.Bridges.Add(new Bridge { ScreenId = "A", Edge = "Right", TopOffset = 0, BottomOffset = 0, TargetScreenId = "" });
+        Mapper.Plan(ms, new Point(2559, 720), new Point(2565, 720), out bmv);
+        Check(bmv.To == b, "empty TargetScreenId falls back to FindNeighbor");
+        Mapper.Cfg = new Settings(); // reset
+
         Console.WriteLine(failures == 0 ? "All tests passed." : failures + " test(s) failed.");
         return failures == 0 ? 0 : 1;
     }

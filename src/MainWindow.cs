@@ -355,6 +355,7 @@ class MainWindow : PaintedWindow
         float by = a.Bottom - barH;
         float bx = a.X;
         bx = Button(g, bx, by, "Identify", false, true, () => Identify.Show(edit, t)) + 8 * s;
+        bx = Button(g, bx, by, "Bridge Setup", false, true, () => OpenBridgeSetup()) + 8 * s;
         Button(g, bx, by, "Reset to Windows defaults", false, true, () =>
         {
             if (MessageBox.Show(this, "Reset the screen positions in this editor to Windows' layout? You can still cancel with Revert before applying.",
@@ -417,6 +418,23 @@ class MainWindow : PaintedWindow
         OnChanged();
     }
 
+    void OpenBridgeSetup()
+    {
+        var saved = Program.Cfg.Bridges;
+        // Regenerate if no bridges or if all bridges are legacy full-edge (both offsets zero)
+        bool legacy = saved.Count > 0 && saved.TrueForAll(b => b.TopOffset == 0 && b.BottomOffset == 0);
+        var bridges = saved.Count > 0 && !legacy
+            ? saved
+            : BridgeWindow.GenerateDefaultBridges(Mapper.Mons);
+        var result = BridgeWindow.ShowSetup(Mapper.Mons, bridges, t);
+        if (result != null)
+        {
+            Program.Cfg.Bridges.Clear();
+            Program.Cfg.Bridges.AddRange(result);
+            Program.Save();
+        }
+    }
+
     double MmX(float x) { return (x - origin.X) / scale + ox; }
     double MmY(float y) { return (y - origin.Y) / scale + oy; }
     float SX(double mm) { return (float)((mm - ox) * scale + origin.X); }
@@ -467,7 +485,8 @@ class MainWindow : PaintedWindow
 
             float numSize = Math.Max(10, Math.Min(40 * s, Math.Min(r.Height * 0.36f, r.Width * 0.3f)));
             bool roomy = r.Height > 110 * s && r.Width > 110 * s;
-            float mid = r.Y + r.Height / 2 - (roomy ? 18 * s : 0);
+            bool compact = !roomy && r.Height > 60 * s && r.Width > 70 * s;
+            float mid = r.Y + r.Height / 2 - (roomy ? 18 * s : compact ? 10 * s : 0);
             using (var big = new Font(Theme.DisplayFont, numSize, GraphicsUnit.Pixel))
                 Draw(g, m.Number.ToString(CultureInfo.InvariantCulture), big, t.Text, new RectangleF(r.X, mid - numSize, r.Width, numSize * 2), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             if (roomy)
@@ -476,6 +495,11 @@ class MainWindow : PaintedWindow
                 Draw(g, m.Model != "" ? m.Model : "Screen " + m.Number, fCaption, t.Text, line, TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
                 line.Y += 18 * s;
                 Draw(g, SizeText(m) + (m.Primary ? "  ·  main display" : ""), fCaption, t.TextDim, line, TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
+            }
+            else if (compact)
+            {
+                var line = new RectangleF(r.X + 4 * s, mid + numSize * 0.6f, r.Width - 8 * s, 16 * s);
+                Draw(g, m.Model != "" ? m.Model : m.R.Width + "x" + m.R.Height, fCaption, t.TextDim, line, TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
             }
 
             var mon = m;

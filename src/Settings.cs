@@ -6,6 +6,16 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+// A bridge restricts cursor crossing to a zone on one edge of a screen.
+class Bridge
+{
+    public string ScreenId;     // which monitor this bridge is on
+    public string Edge;         // Top, Right, Bottom, Left
+    public int TopOffset;       // pixels inset from the start of the edge (left for Top/Bottom, top for Left/Right)
+    public int BottomOffset;    // pixels inset from the end of the edge
+    public string TargetScreenId; // which monitor the cursor jumps to (empty = auto)
+}
+
 // Plain-text settings file, so it can be read, diffed and backed up by hand.
 class Settings
 {
@@ -21,6 +31,7 @@ class Settings
     public bool WelcomeShown;
     public readonly Dictionary<string, double[]> Layout = new Dictionary<string, double[]>(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> notes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public readonly List<Bridge> Bridges = new List<Bridge>();
 
     public bool Existed;
 
@@ -151,6 +162,15 @@ class Settings
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0}  {1}  {2}  {3}  {4}{5}",
                 kv.Key, kv.Value[0], kv.Value[1], kv.Value[2], kv.Value[3], string.IsNullOrEmpty(note) ? "" : "   # " + note));
         }
+        if (Bridges.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("[bridges]");
+            sb.AppendLine("# screen id   edge   top-offset   bottom-offset   target-screen-id");
+            foreach (var b in Bridges)
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0}  {1}  {2}  {3}  {4}",
+                    b.ScreenId, b.Edge, b.TopOffset, b.BottomOffset, b.TargetScreenId ?? ""));
+        }
         return sb.ToString();
     }
 
@@ -162,7 +182,7 @@ class Settings
     public static Settings Parse(string text)
     {
         var s = new Settings { WelcomeShown = !string.IsNullOrWhiteSpace(text) }; // non-empty older settings have already been through first run
-        bool layout = false, fullscreenApps = false;
+        bool layout = false, fullscreenApps = false, bridges = false;
         var blockedApps = new List<string>();
         foreach (var raw in text.Split('\n'))
         {
@@ -171,6 +191,7 @@ class Settings
             {
                 layout = sectionLine.Equals("[layout]", StringComparison.OrdinalIgnoreCase);
                 fullscreenApps = sectionLine.Equals("[fullscreen-apps]", StringComparison.OrdinalIgnoreCase);
+                bridges = sectionLine.Equals("[bridges]", StringComparison.OrdinalIgnoreCase);
                 continue;
             }
             if (fullscreenApps)
@@ -181,6 +202,14 @@ class Settings
             int hash = raw.IndexOf('#');
             string line = (hash >= 0 ? raw.Substring(0, hash) : raw).Trim();
             if (line == "") continue;
+            if (bridges)
+            {
+                var t = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                int topOff, botOff;
+                if (t.Length >= 4 && int.TryParse(t[2], out topOff) && int.TryParse(t[3], out botOff))
+                    s.Bridges.Add(new Bridge { ScreenId = t[0], Edge = t[1], TopOffset = topOff, BottomOffset = botOff, TargetScreenId = t.Length >= 5 ? t[4] : "" });
+                continue;
+            }
             if (layout)
             {
                 var t = line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
