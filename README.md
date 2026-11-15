@@ -30,22 +30,32 @@ On setups with three or more monitors, multiple screens often share the same edg
 
 Bridge mode solves this by dividing each edge into zones, one per neighbor. Each zone covers only the portion of the edge that physically faces its target monitor. The cursor can only cross within a zone, and each zone routes to a specific screen.
 
-![6-monitor setup with bridge overlays showing zones on every screen edge](docs/images/bridge-setup-full.jpg)
+The Layout window shows the physical arrangement of all connected screens. Click **Bridge Setup** to open the bridge editor.
 
-**Use case: keeping the Windows top-edge gesture on your main monitor.** Windows 11 uses the top edge of the primary screen for Snap layouts and the desktop switcher. On a multi-monitor setup where a screen sits above the primary, physmouse would normally let the cursor cross the top edge freely. Bridge mode lets you remove the top-edge bridge on your main monitor while keeping all other crossings, so the Windows top-edge gesture stays functional and the cursor still reaches the upper screen through its side edges.
+![physmouse Layout window showing a 6-monitor arrangement with the Bridge Setup button circled](docs/images/bridge-layout-window.png)
 
-![Close-up showing the bridge setup UI with Claude Code building the PR in the terminal](docs/images/bridge-setup-closeup.jpg)
+When bridge setup opens, each screen gets a full-screen overlay. The cyan bars on each edge are bridge zones. Each zone has a numbered badge showing which screen it connects to. Here all six screens are visible with their bridge overlays active:
+
+![6-monitor desk with bridge setup overlays visible on every screen](docs/images/bridge-setup-full.jpg)
+
+**Use case: keeping the Windows top-edge gesture on your main monitor.** Windows 11 uses the top edge of the primary screen for Snap layouts and the desktop switcher. On a multi-monitor setup where a screen sits above the primary, physmouse would normally let the cursor cross the top edge freely. Bridge mode lets you remove the top-edge bridge on the main monitor (screen 1) while keeping all other crossings. The Windows top-edge gesture stays functional, and the cursor still reaches the upper screen (screen 3) through its side edges or the neighboring screens.
+
+A closer look at the center of the setup shows the bridge zones on screens 3 and 5, with the overlapping edges clearly divided into separate zones:
+
+![Close-up of the center monitors showing bridge zones on screens 3 and 5](docs/images/bridge-setup-closeup.jpg)
+
+The right side of the setup shows screens 4 and 5 with their bridge zones. Screen 5 (Sceptre E24, top right) has bridges connecting down to screen 4 and left to screen 3. Screen 4 (Dell SE2722H, bottom right) has bridges connecting up to screen 5 and left to screen 1:
+
+![Right side of the desk showing bridge zones on screens 4 and 5](docs/images/bridge-setup-right-side.jpg)
 
 ### How it works
 
 1. Open the physmouse settings window and click **Bridge Setup**.
 2. physmouse generates smart defaults by sampling each edge and creating non-overlapping zones. Each zone gets a numbered badge showing which screen it connects to.
-3. Click the **+** button on any edge to add a bridge. When you add a bridge, the reciprocal bridge on the target screen is created automatically.
+3. Click the `+` button on any edge to add a bridge. When you add a bridge, the reciprocal bridge on the target screen is created automatically.
 4. Drag the handles on any bridge bar to resize it, or drag the bar itself to reposition it. Each side of a paired bridge can be adjusted independently to account for physical mount angle differences.
 5. Right-click a bridge bar to remove it. The paired bridge on the other screen is removed as well.
 6. Click **Save** when done, or **Cancel** to discard changes.
-
-![Right side of the setup showing bridge zones on screens 4 and 5](docs/images/bridge-setup-right-side.jpg)
 
 Bridge settings are saved in the `[bridges]` section of `settings.ini` and persist across restarts.
 
